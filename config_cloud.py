@@ -44,3 +44,16 @@ SALARY_FLOOR = 0
 
 SEEN_JOBS_DB = "seen_jobs.json"
 LOG_FILE = "trovly.log"
+
+GREENHOUSE_COMPANIES = [
+    "stripe", "airbnb", "discord", "reddit", "notion", "anthropic",
+    "coinbase", "instacart", "doordash", "robinhood", "figma", "asana",
+]
+LEVER_COMPANIES = ["plaid", "github", "netflix", "mixpanel", "twitch", "loom", "intercom"]
+ASHBY_COMPANIES = ["linear", "vanta", "ramp", "openai", "perplexity", "deel", "supabase"]
+
+ENABLED_SOURCES["greenhouse"] = True
+ENABLED_SOURCES["lever"] = True
+ENABLED_SOURCES["ashby"] = True
+ENABLED_SOURCES["himalayas_api"] = True
+ENABLED_SOURCES["working_nomads"] = True

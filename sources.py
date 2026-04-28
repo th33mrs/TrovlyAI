@@ -17,6 +17,11 @@ import config
 
 logger = logging.getLogger("job_scanner.sources")
 
+try:
+    from sources_ats import ATS_SOURCE_MAP
+except ImportError:
+    ATS_SOURCE_MAP = {}
+
 
 @dataclass
 class JobPosting:
@@ -255,6 +260,9 @@ SOURCE_MAP = {
     "himalayas": fetch_himalayas,
     "rss_feeds": fetch_rss_feeds,
 }
+
+# Merge in ATS-based sources
+SOURCE_MAP.update(ATS_SOURCE_MAP)
 
 
 def fetch_all_jobs():
