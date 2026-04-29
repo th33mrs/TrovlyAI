@@ -5,6 +5,11 @@ Run with: streamlit run app_hosted.py
 
 import streamlit as st
 from auth import login_page, logout, get_user_data, save_user_data
+from usage_limits import (
+    get_user_tier, can_scan, can_tailor,
+    increment_scans, increment_tailors, get_usage_summary,
+    get_tier_limits,
+)
 
 st.set_page_config(
     page_title="Trovly",
@@ -37,6 +42,25 @@ user_data = get_user_data(username)
 with st.sidebar:
     st.markdown("## Trovly")
     st.markdown("Logged in as **{}**".format(username))
+
+    # Tier and usage display
+    tier = get_user_tier(user_data)
+    summary = get_usage_summary(username, tier)
+
+    if tier == "free":
+        st.markdown("**Tier:** Free")
+        if summary["scans_remaining"] == 0:
+            st.error("Scans: {} / {} (limit reached)".format(summary["scans_used"], summary["scans_limit"]))
+        else:
+            st.info("Scans: {} / {}".format(summary["scans_used"], summary["scans_limit"]))
+        st.caption("Resume analyses: {} / {}".format(summary["tailors_used"], summary["tailors_limit"]))
+        st.markdown("---")
+        st.markdown("**Upgrade to Pro** for unlimited scans, more sources, and analytics.")
+        st.button("Upgrade to Pro", disabled=True, help="Payment integration coming soon")
+    else:
+        st.success("Tier: {}".format(summary["tier_label"]))
+
+    st.markdown("---")
     if st.button("Log out"):
         logout()
     st.markdown("---")
@@ -97,6 +121,11 @@ with tab2:
         st.markdown("**Threshold:** {:.0%}".format(user_data.get("threshold", 0.55)))
 
         if st.button("Run scan now", type="primary"):
+            allowed, msg = can_scan(username, tier)
+            if not allowed:
+                st.error(msg)
+                st.stop()
+            increment_scans(username)
             with st.spinner("Scanning job sources... this takes about 60 seconds."):
                 try:
                     import config_cloud as config
@@ -143,7 +172,12 @@ with tab3:
         )
 
         if st.button("Analyze", type="primary"):
+            allowed, msg = can_tailor(username, tier)
+            if not allowed:
+                st.error(msg)
+                st.stop()
             if jd_input and len(jd_input) > 30:
+                increment_tailors(username)
                 with st.spinner("Analyzing..."):
                     try:
                         import config_cloud as config
