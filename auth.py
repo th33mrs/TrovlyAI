@@ -91,8 +91,13 @@ def login_page():
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
-        st.markdown("<h1 style='text-align:center;font-family:Outfit,sans-serif;'>Trovly</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align:center;color:#8892b0;'>AI Job Intelligence</p>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style='text-align:center; padding: 2rem 0 1rem;'>
+            <div style='width: 64px; height: 64px; margin: 0 auto 16px; background: linear-gradient(135deg, #fde047 0%, #fbbf24 30%, #f97316 65%, #ec4899 100%); border-radius: 16px; display: flex; align-items: center; justify-content: center; color: #0d1117; font-family: Outfit, sans-serif; font-weight: 700; font-size: 36px; box-shadow: 0 8px 24px rgba(251, 191, 36, 0.3);'>T</div>
+            <h1 style='font-family: Outfit, sans-serif; font-weight: 700; font-size: 36px; margin: 0; background: linear-gradient(135deg, #fbbf24 0%, #ec4899 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;'>Trovly</h1>
+            <p style='color:#cbd5e1; margin-top: 8px; letter-spacing: 0.05em;'>AI JOB INTELLIGENCE</p>
+        </div>
+        """, unsafe_allow_html=True)
         st.markdown("---")
 
         tab_login, tab_register = st.tabs(["Log in", "Sign up"])

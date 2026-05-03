@@ -27,3 +27,5 @@ Thumbs.db
 .idea/
 config.py
 config.py.cloud
+usage.json
+users.json

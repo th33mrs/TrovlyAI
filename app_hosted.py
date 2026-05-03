@@ -20,15 +20,183 @@ st.set_page_config(
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap');
-html, body, [class*="css"] { font-family: 'Outfit', sans-serif; }
-.main .block-container { padding-top: 2rem; max-width: 1200px; }
-h1 { font-weight: 700 !important; letter-spacing: -0.02em !important; }
-div[data-testid="stMetric"] {
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-    border: 1px solid #0f3460; border-radius: 12px; padding: 16px 20px;
+
+/* Brand variables */
+:root {
+    --gold-300: #fde047;
+    --gold-500: #fbbf24;
+    --amber-500: #f59e0b;
+    --coral-500: #f97316;
+    --pink-500: #ec4899;
+    --night-900: #0d1117;
+    --night-800: #161b22;
+    --night-600: #2d2d44;
+    --paper: #f8fafc;
+    --paper-muted: #cbd5e1;
+    --grad-sunset: linear-gradient(135deg, #fde047 0%, #fbbf24 30%, #f97316 65%, #ec4899 100%);
 }
-div[data-testid="stMetric"] label { color: #8892b0 !important; font-size: 0.85rem !important; }
-div[data-testid="stMetric"] div[data-testid="stMetricValue"] { color: #e6f1ff !important; font-weight: 600 !important; }
+
+html, body, [class*="css"] { font-family: 'Outfit', sans-serif !important; }
+
+.main .block-container {
+    padding-top: 2rem;
+    max-width: 1200px;
+}
+
+/* Headings */
+h1, h2, h3 {
+    font-weight: 700 !important;
+    letter-spacing: -0.02em !important;
+    color: var(--paper) !important;
+}
+
+/* Gradient text for the brand name in main heading */
+h1 {
+    background: linear-gradient(135deg, #fde047 0%, #fbbf24 30%, #f97316 65%, #ec4899 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    display: inline-block;
+}
+
+/* Primary buttons - golden gradient with dark text */
+.stButton > button[kind="primary"],
+.stButton > button[data-testid="baseButton-primary"] {
+    background: linear-gradient(135deg, #fde047 0%, #fbbf24 30%, #f97316 65%, #ec4899 100%) !important;
+    color: #0d1117 !important;
+    font-weight: 600 !important;
+    border: none !important;
+    box-shadow: 0 4px 14px rgba(251, 191, 36, 0.25) !important;
+    transition: transform 0.15s, box-shadow 0.2s !important;
+}
+
+.stButton > button[kind="primary"]:hover,
+.stButton > button[data-testid="baseButton-primary"]:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 20px rgba(251, 191, 36, 0.4) !important;
+}
+
+/* Secondary buttons - outlined */
+.stButton > button:not([kind="primary"]):not([data-testid="baseButton-primary"]) {
+    background: transparent !important;
+    color: #f8fafc !important;
+    border: 1.5px solid #cbd5e1 !important;
+    font-weight: 500 !important;
+}
+
+.stButton > button:not([kind="primary"]):not([data-testid="baseButton-primary"]):hover {
+    border-color: #fbbf24 !important;
+    color: #fbbf24 !important;
+}
+
+/* Metric cards with golden accent border */
+div[data-testid="stMetric"] {
+    background: #161b22;
+    border: 1px solid #2d2d44;
+    border-left: 3px solid #fbbf24;
+    border-radius: 12px;
+    padding: 16px 20px;
+}
+
+div[data-testid="stMetric"] label {
+    color: #cbd5e1 !important;
+    font-size: 0.85rem !important;
+    font-weight: 500 !important;
+}
+
+div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
+    color: #f8fafc !important;
+    font-weight: 700 !important;
+}
+
+/* Tabs - active tab has golden underline */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 8px;
+    border-bottom: 1px solid #2d2d44;
+}
+
+.stTabs [data-baseweb="tab"] {
+    color: #cbd5e1 !important;
+    font-weight: 500 !important;
+}
+
+.stTabs [aria-selected="true"] {
+    color: #fbbf24 !important;
+}
+
+.stTabs [data-baseweb="tab-highlight"] {
+    background: linear-gradient(90deg, #fbbf24, #ec4899) !important;
+    height: 3px !important;
+}
+
+/* Sidebar styling */
+section[data-testid="stSidebar"] {
+    background: #161b22 !important;
+    border-right: 1px solid #2d2d44;
+}
+
+section[data-testid="stSidebar"] .stMarkdown h2 {
+    background: linear-gradient(135deg, #fbbf24 0%, #ec4899 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-size: 28px !important;
+}
+
+/* Info/warning/error boxes */
+div[data-testid="stAlert"] {
+    border-radius: 10px;
+    border-width: 1px;
+}
+
+/* Sliders - gold thumb */
+.stSlider [role="slider"] {
+    background: #fbbf24 !important;
+    border-color: #fbbf24 !important;
+}
+
+/* Text inputs and text areas */
+.stTextInput input, .stTextArea textarea {
+    background: #161b22 !important;
+    border: 1px solid #2d2d44 !important;
+    color: #f8fafc !important;
+    border-radius: 8px !important;
+}
+
+.stTextInput input:focus, .stTextArea textarea:focus {
+    border-color: #fbbf24 !important;
+    box-shadow: 0 0 0 1px #fbbf24 !important;
+}
+
+/* Expander headers */
+.streamlit-expanderHeader {
+    background: #161b22 !important;
+    border: 1px solid #2d2d44 !important;
+    border-radius: 10px !important;
+    border-left: 3px solid #fbbf24 !important;
+}
+
+/* Login screen logo mark */
+.trovly-mark {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 16px;
+    background: linear-gradient(135deg, #fde047 0%, #fbbf24 30%, #f97316 65%, #ec4899 100%);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #0d1117;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    font-size: 36px;
+    box-shadow: 0 8px 24px rgba(251, 191, 36, 0.3);
+}
+
+/* Apply links */
+a[data-testid="stLink"] {
+    color: #fbbf24 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
