@@ -343,7 +343,20 @@ def login_page():
                 else:
                     success, msg = register_user(reg_user, reg_pass, reg_email)
                     if success:
-                        st.success(msg + ". Log in above.")
+                        # Auto-login: drop the user straight into their profile
+                        # instead of forcing a manual sign-in. The first tab in
+                        # app_hosted.py is "Setup" → the profile page.
+                        canonical_username = reg_user.strip()
+                        st.session_state.authenticated = True
+                        st.session_state.username = canonical_username
+                        # Stamp last_login + clear any failed-attempt counter,
+                        # mirroring what check_credentials does on a real login.
+                        reset_failed_attempts(canonical_username)
+                        st.toast(
+                            "Welcome to Trovly, {}!".format(canonical_username),
+                            icon="✨",
+                        )
+                        st.rerun()
                     else:
                         st.error(msg)
 
