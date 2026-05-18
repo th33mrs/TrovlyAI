@@ -20,9 +20,9 @@ install: ## Create local venv and install dev deps
 	$(PIP) install --upgrade pip
 	$(PIP) install -r requirements-dev.txt
 
-dev: ## Start the Dockerized dev site at http://localhost:8501
+dev: ## Start the Dockerized dev site (default http://localhost:8502)
 	docker compose up --build -d
-	@echo "→ http://localhost:8501"
+	@PORT=$${TROVLY_DEV_PORT:-8502}; echo "→ http://localhost:$$PORT"
 
 down: ## Stop the dev site
 	docker compose down

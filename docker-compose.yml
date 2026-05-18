@@ -20,7 +20,10 @@ services:
       LOG_LEVEL: DEBUG
       STREAMLIT_SERVER_RUN_ON_SAVE: "true"
     ports:
-      - "8501:8501"
+      # Host:container — host defaults to 8502 to avoid clashing with a
+      # local `streamlit run` (which binds 8501). Override with
+      # TROVLY_DEV_PORT=8501 in your shell if you'd rather use 8501.
+      - "${TROVLY_DEV_PORT:-8502}:8501"
     volumes:
       # Hot-reload: changes to source files are picked up by Streamlit.
       - ./:/app
