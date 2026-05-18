@@ -3,7 +3,12 @@ Trovly - Hosted App
 Run with: streamlit run app_hosted.py
 """
 
+import json
+import os
+from html import escape
+
 import streamlit as st
+import streamlit.components.v1 as components
 from auth import login_page, logout, get_user_data, save_user_data
 from resume_parser import parse_resume_file
 from applications import (
@@ -22,6 +27,65 @@ st.set_page_config(
     page_icon="mag",
     layout="wide",
 )
+
+LANDING_PAGE_URL = os.getenv("TROVLY_LANDING_PAGE_URL", "https://trovly-landing1.pages.dev/")
+LANDING_FIRST = os.getenv("TROVLY_LANDING_FIRST", "true").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
+LOGIN_QUERY_PARAM = "login"
+
+
+def _get_query_param(name):
+    """Return one Streamlit query param value across old and new APIs."""
+    try:
+        value = st.query_params.get(name)
+    except Exception:
+        try:
+            value = st.experimental_get_query_params().get(name)
+        except Exception:
+            return None
+
+    if isinstance(value, list):
+        return value[0] if value else None
+    return value
+
+
+def _login_requested():
+    value = _get_query_param(LOGIN_QUERY_PARAM)
+    if value is None:
+        return False
+    return str(value).strip().lower() not in {"", "0", "false", "no", "off"}
+
+
+def _authenticated():
+    return "authenticated" in st.session_state and st.session_state.authenticated
+
+
+def _redirect_to_landing_page():
+    landing_attr = escape(LANDING_PAGE_URL, quote=True)
+    landing_js = json.dumps(LANDING_PAGE_URL)
+    components.html(
+        """
+        <script>
+            window.parent.location.replace({landing_js});
+        </script>
+        """.format(landing_js=landing_js),
+        height=0,
+    )
+    st.markdown(
+        """
+        <div style="max-width: 560px; margin: 20vh auto 0; text-align: center; font-family: Outfit, sans-serif;">
+            <h1 style="margin-bottom: 0.5rem;">Taking you to Trovly</h1>
+            <p style="color: #78645a; margin-bottom: 1.5rem;">The public landing page now comes before account login.</p>
+            <a href="{landing_attr}" style="color: #ea580c; font-weight: 700;">Continue to the landing page</a>
+        </div>
+        """.format(landing_attr=landing_attr),
+        unsafe_allow_html=True,
+    )
+    st.stop()
 
 st.markdown("""
 <style>
@@ -210,6 +274,9 @@ a:hover {
 }
 </style>
 """, unsafe_allow_html=True)
+
+if LANDING_FIRST and LANDING_PAGE_URL and not _authenticated() and not _login_requested():
+    _redirect_to_landing_page()
 
 username = login_page()
 

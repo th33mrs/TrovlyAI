@@ -10,7 +10,7 @@ from textwrap import shorten
 import requests
 
 import config
-from sources import JobPosting
+from sources import JobPosting, normalize_posted_date
 
 logger = logging.getLogger("job_scanner.alerts")
 
@@ -26,8 +26,9 @@ def _format_job_text(job: JobPosting, score: float) -> str:
         lines.append(f"📍 {job.location}")
     if job.salary:
         lines.append(f"💰 {job.salary}")
-    if job.posted_date:
-        lines.append(f"📅 {job.posted_date[:10]}")
+    posted_date = normalize_posted_date(job.posted_date)
+    if posted_date:
+        lines.append(f"📅 {posted_date[:10]}")
     lines.append(f"🔗 {job.url}")
     lines.append(f"📡 Source: {job.source}")
     return "\n".join(lines)
@@ -54,8 +55,9 @@ def send_discord_alert(job: JobPosting, score: float) -> bool:
     }
     if job.salary:
         embed["fields"].append({"name": "Salary", "value": job.salary, "inline": True})
-    if job.posted_date:
-        embed["fields"].append({"name": "Posted", "value": job.posted_date[:10], "inline": True})
+    posted_date = normalize_posted_date(job.posted_date)
+    if posted_date:
+        embed["fields"].append({"name": "Posted", "value": posted_date[:10], "inline": True})
 
     payload = {
         "username": "Trovly",

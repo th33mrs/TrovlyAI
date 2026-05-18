@@ -7,7 +7,7 @@ Each source returns a list of JobPosting dataclass instances.
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import feedparser
@@ -23,6 +23,46 @@ except ImportError:
     ATS_SOURCE_MAP = {}
 
 
+def _date_from_unix_timestamp(value) -> Optional[str]:
+    """Return YYYY-MM-DD for Unix timestamps in seconds or milliseconds."""
+    try:
+        timestamp = float(value)
+    except (TypeError, ValueError):
+        return None
+
+    if timestamp <= 0:
+        return None
+
+    while timestamp > 10_000_000_000:
+        timestamp /= 1000
+
+    if timestamp < 1_000_000_000:
+        return None
+
+    try:
+        return datetime.fromtimestamp(timestamp, tz=timezone.utc).date().isoformat()
+    except (OSError, OverflowError, ValueError):
+        return None
+
+
+def normalize_posted_date(value) -> Optional[str]:
+    """Normalize source-specific posted dates to a display-safe string."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, (int, float)):
+        return _date_from_unix_timestamp(value) or str(value)
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    if text.isdigit():
+        return _date_from_unix_timestamp(text) or text
+    return text
+
+
 @dataclass
 class JobPosting:
     title: str
@@ -36,6 +76,7 @@ class JobPosting:
     uid: str = ""
 
     def __post_init__(self):
+        self.posted_date = normalize_posted_date(self.posted_date)
         if not self.uid:
             self.uid = "{}:{}".format(self.source, self.url)
 
