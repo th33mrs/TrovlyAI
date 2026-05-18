@@ -8,7 +8,6 @@ import os
 from html import escape
 
 import streamlit as st
-import streamlit.components.v1 as components
 from auth import login_page, logout, get_user_data, save_user_data
 from resume_parser import parse_resume_file
 from applications import (
@@ -67,25 +66,26 @@ def _authenticated():
 def _redirect_to_landing_page():
     landing_attr = escape(LANDING_PAGE_URL, quote=True)
     landing_js = json.dumps(LANDING_PAGE_URL)
-    components.html(
+    st.html(
         """
         <script>
+            window.top.location.replace({landing_js});
             window.parent.location.replace({landing_js});
+            window.location.replace({landing_js});
         </script>
-        """.format(landing_js=landing_js),
-        height=0,
+        <meta http-equiv="refresh" content="0; url={landing_attr}">
+        """.format(landing_js=landing_js, landing_attr=landing_attr),
+        unsafe_allow_javascript=True,
     )
     st.markdown(
-        """
-        <div style="max-width: 560px; margin: 20vh auto 0; text-align: center; font-family: Outfit, sans-serif;">
-            <h1 style="margin-bottom: 0.5rem;">Taking you to Trovly</h1>
-            <p style="color: #78645a; margin-bottom: 1.5rem;">The public landing page now comes before account login.</p>
-            <a href="{landing_attr}" style="color: #ea580c; font-weight: 700;">Continue to the landing page</a>
-        </div>
-        """.format(landing_attr=landing_attr),
+        '<meta http-equiv="refresh" content="0; url={}">'.format(landing_attr),
         unsafe_allow_html=True,
     )
     st.stop()
+
+
+if LANDING_FIRST and LANDING_PAGE_URL and not _authenticated() and not _login_requested():
+    _redirect_to_landing_page()
 
 st.markdown("""
 <style>
@@ -274,9 +274,6 @@ a:hover {
 }
 </style>
 """, unsafe_allow_html=True)
-
-if LANDING_FIRST and LANDING_PAGE_URL and not _authenticated() and not _login_requested():
-    _redirect_to_landing_page()
 
 username = login_page()
 
