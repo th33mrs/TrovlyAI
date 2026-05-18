@@ -25,7 +25,7 @@ import schedule
 import config
 from alerts import send_alerts
 from matcher import match_jobs, score_distribution
-from sources import JobPosting, fetch_all_jobs
+from sources import JobPosting, fetch_all_jobs, normalize_posted_date
 from tracker import JobTracker
 from dateutil import parser as dateparser
 
@@ -37,12 +37,14 @@ def filter_by_age(jobs, max_days):
     cutoff = datetime.now().timestamp() - (max_days * 86400)
     kept = []
     for job in jobs:
-        if not job.posted_date:
+        posted_date = normalize_posted_date(job.posted_date)
+        if not posted_date:
             kept.append(job)  # keep jobs with no date rather than discard
             continue
         try:
-            posted_ts = dateparser.parse(job.posted_date, ignoretz=True).timestamp()
+            posted_ts = dateparser.parse(posted_date, ignoretz=True).timestamp()
             if posted_ts >= cutoff:
+                job.posted_date = posted_date
                 kept.append(job)
         except Exception:
             kept.append(job)  # keep if unparseable
