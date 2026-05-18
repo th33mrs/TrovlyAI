@@ -3,11 +3,7 @@ Trovly - Hosted App
 Run with: streamlit run app_hosted.py
 """
 
-import json
-import os
-
 import streamlit as st
-import streamlit.components.v1 as components
 from auth import login_page, logout, get_user_data, save_user_data
 from resume_parser import parse_resume_file
 from applications import (
@@ -26,60 +22,6 @@ st.set_page_config(
     page_icon="mag",
     layout="wide",
 )
-
-LANDING_PAGE_URL = os.getenv("TROVLY_LANDING_PAGE_URL", "https://trovlyai.us/")
-LANDING_FIRST = os.getenv("TROVLY_LANDING_FIRST", "true").strip().lower() not in {
-    "0",
-    "false",
-    "no",
-    "off",
-}
-LOGIN_QUERY_PARAM = "login"
-
-
-def _get_query_param(name):
-    """Return one Streamlit query param value across old and new APIs."""
-    try:
-        value = st.query_params.get(name)
-    except Exception:
-        try:
-            value = st.experimental_get_query_params().get(name)
-        except Exception:
-            return None
-
-    if isinstance(value, list):
-        return value[0] if value else None
-    return value
-
-
-def _login_requested():
-    value = _get_query_param(LOGIN_QUERY_PARAM)
-    if value is None:
-        return False
-    return str(value).strip().lower() not in {"", "0", "false", "no", "off"}
-
-
-def _authenticated():
-    return "authenticated" in st.session_state and st.session_state.authenticated
-
-
-def _redirect_to_landing_page():
-    landing_js = json.dumps(LANDING_PAGE_URL)
-    components.html(
-        """
-        <script>
-            window.top.location.replace({landing_js});
-            window.parent.location.replace({landing_js});
-            window.location.replace({landing_js});
-        </script>
-        """.format(landing_js=landing_js),
-        height=0,
-    )
-    st.stop()
-
-
-if LANDING_FIRST and LANDING_PAGE_URL and not _authenticated() and not _login_requested():
-    _redirect_to_landing_page()
 
 st.markdown("""
 <style>
@@ -268,9 +210,6 @@ a:hover {
 }
 </style>
 """, unsafe_allow_html=True)
-
-if LANDING_FIRST and LANDING_PAGE_URL and not _authenticated() and not _login_requested():
-    _redirect_to_landing_page()
 
 username = login_page()
 
