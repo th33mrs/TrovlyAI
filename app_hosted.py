@@ -7,6 +7,7 @@ import json
 import os
 
 import streamlit as st
+import streamlit.components.v1 as components
 from auth import login_page, logout, get_user_data, save_user_data
 from resume_parser import parse_resume_file
 from applications import (
@@ -64,7 +65,7 @@ def _authenticated():
 
 def _redirect_to_landing_page():
     landing_js = json.dumps(LANDING_PAGE_URL)
-    st.html(
+    components.html(
         """
         <script>
             window.top.location.replace({landing_js});
@@ -72,7 +73,7 @@ def _redirect_to_landing_page():
             window.location.replace({landing_js});
         </script>
         """.format(landing_js=landing_js),
-        unsafe_allow_javascript=True,
+        height=0,
     )
     st.stop()
 
