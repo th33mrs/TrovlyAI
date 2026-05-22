@@ -14,7 +14,6 @@ Security features:
 import json
 import logging
 import re
-import secrets
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -278,6 +277,59 @@ def register_user(username, password, email):
     return True, "Account created successfully"
 
 
+def find_username_by_email(email):
+    """
+    Find the username registered to an email address.
+    Returns (success, message, username).
+    """
+    valid, result = validate_email(email)
+    if not valid:
+        return False, result, None
+    email = result
+
+    users = load_users()
+    for username, data in users.items():
+        if data.get("email", "").lower().strip() == email:
+            return True, "Username found", username
+
+    return False, "No account found for that email", None
+
+
+def reset_password(username, email, new_password):
+    """
+    Reset a password after matching both username and account email.
+    Returns (success, message).
+    """
+    valid, result = validate_username(username)
+    if not valid:
+        return False, result
+    username = result
+
+    valid, result = validate_email(email)
+    if not valid:
+        return False, result
+    email = result
+
+    valid, result = validate_password(new_password)
+    if not valid:
+        return False, result
+
+    users = load_users()
+    user = users.get(username)
+    if not user or user.get("email", "").lower().strip() != email:
+        return False, "Username and email do not match an account"
+
+    user["password_hash"] = hash_password(new_password)
+    user["failed_attempts"] = 0
+    user["locked_until"] = None
+    user["last_failed_attempt"] = None
+    user["last_password_reset"] = datetime.now().isoformat()
+    users[username] = user
+    save_users(users)
+    logger.info("Password reset for user: {}".format(username))
+    return True, "Password updated. You can log in with your new password."
+
+
 def get_user_data(username):
     """Get user profile data."""
     users = load_users()
@@ -289,7 +341,14 @@ def save_user_data(username, data):
     users = load_users()
     if username in users:
         # Don't allow auth fields to be overwritten
-        protected_fields = {"password_hash", "failed_attempts", "locked_until", "created_at"}
+        protected_fields = {
+            "created_at",
+            "email",
+            "failed_attempts",
+            "last_password_reset",
+            "locked_until",
+            "password_hash",
+        }
         safe_data = {k: v for k, v in data.items() if k not in protected_fields}
         users[username].update(safe_data)
     else:
@@ -314,7 +373,7 @@ def login_page():
         """, unsafe_allow_html=True)
         st.markdown("---")
 
-        tab_login, tab_register = st.tabs(["Log in", "Sign up"])
+        tab_login, tab_register, tab_recover = st.tabs(["Log in", "Sign up", "Recover"])
 
         with tab_login:
             login_user = st.text_input("Username", key="login_user", max_chars=32)
@@ -359,6 +418,54 @@ def login_page():
                         st.rerun()
                     else:
                         st.error(msg)
+
+        with tab_recover:
+            recovery_mode = st.radio(
+                "Recovery option",
+                ["Find username", "Reset password"],
+                horizontal=True,
+                key="recovery_mode",
+            )
+
+            if recovery_mode == "Find username":
+                recovery_email = st.text_input(
+                    "Account email",
+                    key="recover_username_email",
+                    max_chars=254,
+                )
+
+                if st.button("Find username", use_container_width=True):
+                    success, msg, recovered_username = find_username_by_email(recovery_email)
+                    if success:
+                        st.success("Username: {}".format(recovered_username))
+                    else:
+                        st.error(msg)
+            else:
+                reset_user = st.text_input("Username", key="reset_user", max_chars=32)
+                reset_email = st.text_input("Account email", key="reset_email", max_chars=254)
+                reset_pass = st.text_input(
+                    "New password",
+                    type="password",
+                    key="reset_pass",
+                    max_chars=128,
+                    help="At least 12 characters with 3 of: uppercase, lowercase, numbers, symbols",
+                )
+                reset_pass2 = st.text_input(
+                    "Confirm new password",
+                    type="password",
+                    key="reset_pass2",
+                    max_chars=128,
+                )
+
+                if st.button("Reset password", type="primary", use_container_width=True):
+                    if reset_pass != reset_pass2:
+                        st.error("Passwords don't match")
+                    else:
+                        success, msg = reset_password(reset_user.strip(), reset_email, reset_pass)
+                        if success:
+                            st.success(msg)
+                        else:
+                            st.error(msg)
 
     return None
 

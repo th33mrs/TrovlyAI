@@ -18,6 +18,7 @@ import auth
 HARNESS = str(Path(__file__).parent / "_login_harness.py")
 
 VALID_PASS = "Sup3rStr0ng!Pass"
+NEW_VALID_PASS = "BrandN3w!Pass99"
 
 
 # ─── register_user — pure logic ──────────────────────────────────────
@@ -61,6 +62,69 @@ def test_password_is_hashed_not_plaintext():
     assert stored != VALID_PASS
     assert stored.startswith("$2")  # bcrypt prefix
     assert auth.verify_password(VALID_PASS, stored) is True
+
+
+# ─── account recovery — pure logic ──────────────────────────────────
+
+
+def test_find_username_by_email_returns_matching_username():
+    auth.register_user("grace_h", VALID_PASS, "Grace@example.com")
+
+    ok, msg, username = auth.find_username_by_email(" grace@example.com ")
+
+    assert ok is True, msg
+    assert username == "grace_h"
+
+
+def test_find_username_by_email_rejects_unknown_email():
+    ok, msg, username = auth.find_username_by_email("missing@example.com")
+
+    assert ok is False
+    assert username is None
+    assert "no account" in msg.lower()
+
+
+def test_reset_password_updates_hash_and_clears_lockout():
+    auth.register_user("heidi", VALID_PASS, "heidi@example.com")
+    users = auth.load_users()
+    users["heidi"]["failed_attempts"] = auth.MAX_LOGIN_ATTEMPTS
+    users["heidi"]["locked_until"] = "2999-01-01T00:00:00"
+    users["heidi"]["last_failed_attempt"] = "2999-01-01T00:00:00"
+    old_hash = users["heidi"]["password_hash"]
+    auth.save_users(users)
+
+    ok, msg = auth.reset_password("heidi", "heidi@example.com", NEW_VALID_PASS)
+
+    assert ok is True, msg
+    updated_user = auth.load_users()["heidi"]
+    assert updated_user["password_hash"] != old_hash
+    assert auth.verify_password(NEW_VALID_PASS, updated_user["password_hash"]) is True
+    assert updated_user["failed_attempts"] == 0
+    assert updated_user["locked_until"] is None
+    assert updated_user["last_failed_attempt"] is None
+    assert updated_user["last_password_reset"]
+
+
+def test_reset_password_rejects_wrong_email_and_keeps_hash():
+    auth.register_user("ivan", VALID_PASS, "ivan@example.com")
+    old_hash = auth.load_users()["ivan"]["password_hash"]
+
+    ok, msg = auth.reset_password("ivan", "wrong@example.com", NEW_VALID_PASS)
+
+    assert ok is False
+    assert "match" in msg.lower()
+    assert auth.load_users()["ivan"]["password_hash"] == old_hash
+
+
+def test_reset_password_rejects_weak_password():
+    auth.register_user("judy", VALID_PASS, "judy@example.com")
+    old_hash = auth.load_users()["judy"]["password_hash"]
+
+    ok, msg = auth.reset_password("judy", "judy@example.com", "weak")
+
+    assert ok is False
+    assert "characters" in msg.lower()
+    assert auth.load_users()["judy"]["password_hash"] == old_hash
 
 
 # ─── signup → auto-login regression (Streamlit AppTest) ──────────────
