@@ -6,9 +6,10 @@ Each source returns a list of JobPosting dataclass instances.
 
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import urlencode
 
 import feedparser
 import requests
@@ -16,6 +17,19 @@ import requests
 import config
 
 logger = logging.getLogger("job_scanner.sources")
+
+LENNYS_JOBS_APP_ID = "V00CGAZFSS"
+LENNYS_JOBS_API_KEY = "e07ab2a8c02b4250f8bff7cbaf528b7f"
+LENNYS_JOBS_INDEX = "job"
+LENNYS_JOBS_ENDPOINT = f"https://{LENNYS_JOBS_APP_ID}-dsn.algolia.net/1/indexes/{LENNYS_JOBS_INDEX}/query"
+LENNYS_JOBS_SCOPE_FILTER = "(is_trueup_tech = 1 OR platform_partner_lenny = 1)"
+LENNYS_JOBS_CATEGORY_FILTER = (
+    "(job_subcategories_all:\"Product Management\" "
+    "OR job_subcategories_all:\"Marketing & Growth\" "
+    "OR job_subcategories_all:\"Engineering (Software)\" "
+    "OR job_subcategories_all:\"Design (Product)\")"
+)
+LENNYS_JOBS_REMOTE_FILTER = "job_locations_combined:\"\U0001f30e Remote\""
 
 try:
     from sources_ats import ATS_SOURCE_MAP
@@ -249,6 +263,126 @@ def fetch_jobicy(queries):
     return jobs
 
 
+def _format_lennys_salary(hit):
+    salary_min = hit.get("salary_range_min")
+    salary_max = hit.get("salary_range_max")
+    if not salary_min and not salary_max:
+        return None
+
+    def fmt(value):
+        try:
+            amount = float(value)
+        except (TypeError, ValueError):
+            return str(value)
+        if amount < 1000:
+            return f"${amount:,.0f}K"
+        return f"${amount:,.0f}"
+
+    if salary_min and salary_max:
+        return f"{fmt(salary_min)} - {fmt(salary_max)}"
+    if salary_min:
+        return f"{fmt(salary_min)}+"
+    return f"Up to {fmt(salary_max)}"
+
+
+def _format_lennys_description(hit):
+    parts = [
+        hit.get("title", ""),
+        hit.get("business_description_short", ""),
+    ]
+
+    tags = hit.get("description_tags") or []
+    if tags:
+        parts.append(f"Skills/tools: {', '.join(tags)}")
+
+    company_context = hit.get("company_description_plus") or []
+    if company_context:
+        parts.append(f"Company context: {', '.join(company_context)}")
+
+    open_roles = hit.get("job_openings_total")
+    if open_roles:
+        parts.append(f"Company open roles: {open_roles}")
+
+    if hit.get("platform_partner_lenny"):
+        parts.append("Posted by Lenny Community")
+
+    third_party_lists = hit.get("third_party_lists") or []
+    if isinstance(third_party_lists, list) and "Lenny 100" in third_party_lists:
+        parts.append("Lenny 100 company")
+
+    investors = [
+        investor.get("name", "")
+        for investor in hit.get("company_investor_details") or []
+        if investor.get("name")
+    ]
+    if investors:
+        parts.append(f"Investors: {', '.join(investors)}")
+
+    ats_warning = hit.get("ats_ux_warning")
+    if ats_warning:
+        parts.append(f"ATS note: {ats_warning}")
+
+    return ". ".join(str(part).strip() for part in parts if str(part).strip())
+
+
+def _lennys_jobs_filter():
+    filters = [LENNYS_JOBS_SCOPE_FILTER, LENNYS_JOBS_CATEGORY_FILTER]
+    if getattr(config, "REMOTE_ONLY", False):
+        filters.append(LENNYS_JOBS_REMOTE_FILTER)
+    return " AND ".join(filters)
+
+
+def fetch_lennys_jobs(queries):
+    """Lenny's Jobs, powered by TrueUp's public Algolia search index."""
+    search_terms = [q.strip() for q in queries if q and q.strip()]
+    if not search_terms:
+        return []
+
+    hits_per_query = int(getattr(config, "LENNYS_JOBS_HITS_PER_QUERY", 20) or 20)
+    hits_per_query = max(1, min(hits_per_query, 100))
+    headers = {
+        "x-algolia-application-id": LENNYS_JOBS_APP_ID,
+        "x-algolia-api-key": LENNYS_JOBS_API_KEY,
+        "content-type": "application/json",
+    }
+    filters = _lennys_jobs_filter()
+    jobs = []
+
+    for q in search_terms:
+        try:
+            params = urlencode({
+                "query": q,
+                "hitsPerPage": hits_per_query,
+                "filters": filters,
+            })
+            resp = requests.post(
+                LENNYS_JOBS_ENDPOINT,
+                headers=headers,
+                json={"params": params},
+                timeout=15,
+            )
+            resp.raise_for_status()
+
+            for hit in resp.json().get("hits", []):
+                job_id = hit.get("job_id") or hit.get("objectID") or hit.get("url", "")
+                jobs.append(JobPosting(
+                    title=hit.get("title", ""),
+                    company=hit.get("company_name", "Unknown"),
+                    description=_format_lennys_description(hit),
+                    url=hit.get("url", ""),
+                    location=hit.get("location", ""),
+                    source="lennys_jobs",
+                    posted_date=hit.get("updated_at", ""),
+                    salary=_format_lennys_salary(hit),
+                    uid=f"lennys_jobs:{job_id}",
+                ))
+            time.sleep(0.3)
+        except Exception as e:
+            logger.error("Lenny's Jobs error for '%s': %s", q, e)
+
+    return jobs
+
+
 def fetch_himalayas(queries):
     """Himalayas.app — remote jobs via RSS feed. No key needed."""
     jobs = []
@@ -298,6 +432,7 @@ SOURCE_MAP = {
     "usajobs": fetch_usajobs,
     "the_muse": fetch_the_muse,
     "jobicy": fetch_jobicy,
+    "lennys_jobs": fetch_lennys_jobs,
     "himalayas": fetch_himalayas,
     "rss_feeds": fetch_rss_feeds,
 }

@@ -19,6 +19,7 @@ saved_jds.json
 applications.json
 users.json
 usage.json
+analytics_events.json
 job_matches.csv
 tailored_*.txt
 *.session

@@ -4,7 +4,7 @@ Trovly - Usage Limits and Tier Management
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 logger = logging.getLogger("trovly.usage")
@@ -14,29 +14,57 @@ TIER_LIMITS = {
         "scans_per_month": 5,
         "max_sources": 4,
         "max_queries": 3,
-        "tailor_per_month": 5,
+        "max_matches_per_scan": 10,
+        "tailor_per_month": 3,
         "label": "Free",
+        "price": "$0",
     },
     "pro": {
         "scans_per_month": -1,
         "max_sources": -1,
         "max_queries": -1,
+        "max_matches_per_scan": -1,
         "tailor_per_month": -1,
         "label": "Pro",
+        "price": "$29/mo",
     },
+    "career_hunter": {
+        "scans_per_month": -1,
+        "max_sources": -1,
+        "max_queries": -1,
+        "max_matches_per_scan": -1,
+        "tailor_per_month": -1,
+        "label": "Career Hunter",
+        "price": "$79/mo",
+    },
+    "offer_accelerator": {
+        "scans_per_month": -1,
+        "max_sources": -1,
+        "max_queries": -1,
+        "max_matches_per_scan": -1,
+        "tailor_per_month": -1,
+        "label": "Offer Accelerator",
+        "price": "$199 one-time",
+    },
+    # Backward-compatible alias for older user records.
     "power": {
         "scans_per_month": -1,
         "max_sources": -1,
         "max_queries": -1,
+        "max_matches_per_scan": -1,
         "tailor_per_month": -1,
-        "label": "Power",
+        "label": "Career Hunter",
+        "price": "$79/mo",
     },
 }
 
 
 def get_user_tier(user_data):
     """Get the user's tier, defaulting to free."""
-    return user_data.get("tier", "free")
+    tier = user_data.get("tier", "free")
+    if tier == "power":
+        return "career_hunter"
+    return tier
 
 
 def get_tier_limits(tier):
@@ -47,7 +75,7 @@ def get_tier_limits(tier):
 def get_current_period():
     """Returns the current month identifier like '2026-04'."""
     now = datetime.now()
-    return "{}-{:02d}".format(now.year, now.month)
+    return f"{now.year}-{now.month:02d}"
 
 
 def get_usage(username):
@@ -60,17 +88,14 @@ def get_usage(username):
         all_usage = json.loads(usage_path.read_text())
         return all_usage.get(username, {})
     except Exception as e:
-        logger.error("Error reading usage.json: {}".format(e))
+        logger.error(f"Error reading usage.json: {e}")
         return {}
 
 
 def save_usage(username, usage_data):
     """Save usage data for a user."""
     usage_path = Path("usage.json")
-    if usage_path.exists():
-        all_usage = json.loads(usage_path.read_text())
-    else:
-        all_usage = {}
+    all_usage = json.loads(usage_path.read_text()) if usage_path.exists() else {}
 
     all_usage[username] = usage_data
     usage_path.write_text(json.dumps(all_usage, indent=2))
@@ -126,8 +151,11 @@ def can_scan(username, tier):
     remaining = limits["scans_per_month"] - used
 
     if remaining <= 0:
-        return False, "You have used all {} free scans this month. Upgrade to Pro for unlimited scans.".format(
-            limits["scans_per_month"]
+        return (
+            False,
+            "You have used all {} free scans this month. Upgrade to Pro for unlimited scans, match explanations, and high-fit alerts.".format(
+                limits["scans_per_month"]
+            ),
         )
 
     return True, "{} of {} free scans remaining this month".format(
@@ -145,8 +173,11 @@ def can_tailor(username, tier):
     remaining = limits["tailor_per_month"] - used
 
     if remaining <= 0:
-        return False, "You have used all {} free resume analyses this month. Upgrade to Pro for unlimited.".format(
-            limits["tailor_per_month"]
+        return (
+            False,
+            "You have used all {} free resume analyses this month. Upgrade to Pro for unlimited tailoring and ATS optimization.".format(
+                limits["tailor_per_month"]
+            ),
         )
 
     return True, "{} of {} free resume analyses remaining".format(
@@ -163,16 +194,20 @@ def get_usage_summary(username, tier):
     return {
         "tier": tier,
         "tier_label": limits["label"],
+        "tier_price": limits.get("price", ""),
         "scans_used": scans_used,
         "scans_limit": limits["scans_per_month"],
         "tailors_used": tailors_used,
         "tailors_limit": limits["tailor_per_month"],
+        "max_matches_per_scan": limits.get("max_matches_per_scan", -1),
         "scans_remaining": (
-            -1 if limits["scans_per_month"] == -1
+            -1
+            if limits["scans_per_month"] == -1
             else max(0, limits["scans_per_month"] - scans_used)
         ),
         "tailors_remaining": (
-            -1 if limits["tailor_per_month"] == -1
+            -1
+            if limits["tailor_per_month"] == -1
             else max(0, limits["tailor_per_month"] - tailors_used)
         ),
     }
