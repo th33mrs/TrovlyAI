@@ -18,7 +18,7 @@ from html import unescape
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-import config
+import config_runtime as config
 
 logger = logging.getLogger("trovly.roles")
 

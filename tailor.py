@@ -14,7 +14,7 @@ from html import unescape
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-import config
+import config_runtime as config
 from tracker import JobTracker
 
 MODEL_NAME = "all-MiniLM-L6-v2"

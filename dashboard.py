@@ -17,7 +17,7 @@ from pathlib import Path
 
 import requests
 
-import config
+import config_runtime as config
 from tracker import JobTracker
 
 logger = logging.getLogger("job_scanner.dashboard")
