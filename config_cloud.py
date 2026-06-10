@@ -20,9 +20,11 @@ ENABLED_SOURCES = {
     "usajobs": False,
     "the_muse": True,
     "jobicy": True,
+    "lennys_jobs": True,
     "himalayas": True,
     "rss_feeds": True,
 }
+LENNYS_JOBS_HITS_PER_QUERY = 20
 
 ADZUNA_APP_ID = ""
 ADZUNA_APP_KEY = ""
