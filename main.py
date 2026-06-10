@@ -22,7 +22,7 @@ from pathlib import Path
 
 import schedule
 
-import config
+import config_runtime as config
 from alerts import send_alerts
 from matcher import match_jobs, score_distribution
 from sources import JobPosting, fetch_all_jobs, normalize_posted_date

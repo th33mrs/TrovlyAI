@@ -14,7 +14,7 @@ from urllib.parse import urlencode
 import feedparser
 import requests
 
-import config
+import config_runtime as config
 
 logger = logging.getLogger("job_scanner.sources")
 

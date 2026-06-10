@@ -21,7 +21,7 @@ import re
 import feedparser
 import requests
 
-import config
+import config_runtime as config
 from sources import JobPosting
 
 logger = logging.getLogger("trovly.sources_ats")

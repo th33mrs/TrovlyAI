@@ -643,7 +643,7 @@ with tab_scan:
                 "Scanning fresh roles, scoring fit, salary, gaps, and interview likelihood..."
             ):
                 try:
-                    import config
+                    import config_runtime as config
                     from matcher import match_jobs, reload_resume
                     from sources import fetch_all_jobs
 
@@ -945,7 +945,7 @@ with tab_tailor:
                     "Scoring resume bullets, ATS keywords, and cover letter structure..."
                 ):
                     try:
-                        import config
+                        import config_runtime as config
                         from matcher import reload_resume
                         from tailor import tailor_resume
 

@@ -9,7 +9,7 @@ from textwrap import shorten
 
 import requests
 
-import config
+import config_runtime as config
 from job_intelligence import build_match_intelligence
 from sources import JobPosting, normalize_posted_date
 

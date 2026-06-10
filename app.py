@@ -14,7 +14,7 @@ from sentence_transformers import SentenceTransformer
 
 from tracker import JobTracker
 from tailor import tailor_resume, _extract_keywords, _clean_text
-import config
+import config_runtime as config
 
 st.set_page_config(
     page_title="Trovly",
