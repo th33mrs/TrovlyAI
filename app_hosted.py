@@ -3,10 +3,24 @@ Trovly - Hosted App
 Run with: streamlit run app_hosted.py
 """
 
+import csv
 from html import escape
+from io import StringIO
 
 import streamlit as st
 
+from admin_tools import (
+    build_admin_overview,
+    build_application_rows,
+    build_event_mix,
+    build_event_rows,
+    build_store_status,
+    build_user_rows,
+    is_admin_user,
+    load_admin_state,
+    reset_user_usage,
+    update_user_admin_fields,
+)
 from analytics import (
     get_funnel_metrics,
     get_retention_metrics,
@@ -47,8 +61,10 @@ from product_strategy import (
 from resume_parser import parse_resume_file
 from tracker import JobTracker
 from usage_limits import (
+    TIER_LIMITS,
     can_scan,
     can_tailor,
+    get_current_period,
     get_usage_summary,
     get_user_tier,
     increment_scans,
@@ -314,6 +330,7 @@ if username is None:
     st.stop()
 
 user_data = get_user_data(username)
+user_is_admin = is_admin_user(username, user_data)
 tier = get_user_tier(user_data)
 summary = get_usage_summary(username, tier)
 tracker = JobTracker()
@@ -334,6 +351,16 @@ def _pill_row(items):
     return "<div class='pill-row'>{}</div>".format(
         "".join(f"<span class='mini-pill'>{escape(str(item))}</span>" for item in items)
     )
+
+
+def _rows_to_csv(rows):
+    if not rows:
+        return ""
+    buffer = StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=list(rows[0].keys()))
+    writer.writeheader()
+    writer.writerows(rows)
+    return buffer.getvalue()
 
 
 def _upgrade_intent(plan_key, source):
@@ -377,6 +404,8 @@ def _render_plan(plan_key, current_tier):
 with st.sidebar:
     st.markdown("## Trovly AI")
     st.caption(f"Logged in as {username}")
+    if user_is_admin:
+        st.caption("Admin access")
     st.markdown("---")
 
     st.markdown("**Plan:** {}".format(summary["tier_label"]))
@@ -429,6 +458,21 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+tab_labels = [
+    "Command Center",
+    "Onboarding",
+    "Match Scan",
+    "Responsive Targets",
+    "Resume AI",
+    "Applications",
+    "Alerts",
+    "Pricing",
+]
+if user_is_admin:
+    tab_labels.append("Admin")
+tab_labels.append("Recruiter Mode")
+
+tabs = st.tabs(tab_labels)
 (
     tab_dashboard,
     tab_setup,
@@ -438,22 +482,14 @@ st.markdown(
     tab_apps,
     tab_alerts,
     tab_pricing,
-    tab_admin,
-    tab_recruiter,
-) = st.tabs(
-    [
-        "Command Center",
-        "Onboarding",
-        "Match Scan",
-        "Responsive Targets",
-        "Resume AI",
-        "Applications",
-        "Alerts",
-        "Pricing",
-        "Analytics",
-        "Recruiter Mode",
-    ]
-)
+) = tabs[:8]
+
+if user_is_admin:
+    tab_admin = tabs[8]
+    tab_recruiter = tabs[9]
+else:
+    tab_admin = None
+    tab_recruiter = tabs[8]
 
 with tab_dashboard:
     col1, col2, col3, col4 = st.columns(4)
@@ -1260,32 +1296,234 @@ with tab_pricing:
     for prompt in UPGRADE_PROMPTS.values():
         st.markdown("**{}** {}".format(prompt["headline"], prompt["body"]))
 
-with tab_admin:
-    st.markdown("### Admin analytics")
-    st.markdown(
-        "Funnel, retention, conversion, and alert engagement concepts for the current JSON-backed app."
-    )
+if user_is_admin and tab_admin is not None:
+    with tab_admin:
+        st.markdown("### Admin panel")
+        current_period = get_current_period()
+        admin_state = load_admin_state()
+        admin_users = admin_state["users"]
+        admin_usage = admin_state["usage"]
+        admin_applications = admin_state["applications"]
+        admin_events = admin_state["events"]
 
-    funnel = get_funnel_metrics(days=30)
-    retention = get_retention_metrics(days=30)
-    st.markdown("#### Funnel")
-    st.table(funnel)
-    st.markdown("#### Retention")
-    if retention:
-        st.line_chart({row["date"]: row["active_users"] for row in retention})
-    else:
-        st.info("No retention events yet.")
+        overview = build_admin_overview(
+            admin_users,
+            admin_usage,
+            admin_applications,
+            admin_events,
+            period=current_period,
+        )
 
-    st.markdown("#### Events to productionize")
-    for event in [
-        "resume_uploaded",
-        "match_clicked",
-        "application_tracked",
-        "subscription_upgraded",
-        "alert_engaged",
-        "interview_outcome_logged",
-    ]:
-        st.markdown(f"- {event}")
+        metric_row = st.columns(5)
+        with metric_row[0]:
+            st.metric("Users", overview["total_users"], overview["new_users_30d"])
+        with metric_row[1]:
+            st.metric("Active 30d", overview["active_users_30d"])
+        with metric_row[2]:
+            st.metric("Premium", overview["premium_users"])
+        with metric_row[3]:
+            st.metric("Applications", overview["applications_total"])
+        with metric_row[4]:
+            st.metric("Offers", overview["offers_total"])
+
+        metric_row = st.columns(5)
+        with metric_row[0]:
+            st.metric("Admins", overview["admin_users"])
+        with metric_row[1]:
+            st.metric("Locked", overview["locked_accounts"])
+        with metric_row[2]:
+            st.metric("Scans", overview["scans_this_month"])
+        with metric_row[3]:
+            st.metric("Tailors", overview["tailors_this_month"])
+        with metric_row[4]:
+            st.metric("Upgrade intents", overview["upgrade_intents_30d"])
+
+        st.markdown("#### Users")
+        user_rows = build_user_rows(
+            admin_users,
+            admin_usage,
+            admin_applications,
+            admin_events,
+            period=current_period,
+        )
+        plan_options = [tier_key for tier_key in TIER_LIMITS if tier_key != "power"]
+        filter_cols = st.columns([1.4, 0.8, 0.8])
+        with filter_cols[0]:
+            user_search = st.text_input("Search users", key="admin_user_search")
+        with filter_cols[1]:
+            plan_filter = st.selectbox(
+                "Plan",
+                ["All"] + plan_options,
+                key="admin_plan_filter",
+            )
+        with filter_cols[2]:
+            state_filter = st.selectbox(
+                "State",
+                ["All", "Admins", "Locked", "Premium", "Onboarded"],
+                key="admin_state_filter",
+            )
+
+        filtered_user_rows = user_rows
+        if user_search:
+            needle = user_search.strip().lower()
+            filtered_user_rows = [
+                row
+                for row in filtered_user_rows
+                if needle in row["username"].lower() or needle in row["email"].lower()
+            ]
+        if plan_filter != "All":
+            filtered_user_rows = [row for row in filtered_user_rows if row["tier"] == plan_filter]
+        if state_filter == "Admins":
+            filtered_user_rows = [row for row in filtered_user_rows if row["admin"]]
+        elif state_filter == "Locked":
+            filtered_user_rows = [row for row in filtered_user_rows if row["locked"]]
+        elif state_filter == "Premium":
+            filtered_user_rows = [row for row in filtered_user_rows if row["tier"] != "free"]
+        elif state_filter == "Onboarded":
+            filtered_user_rows = [row for row in filtered_user_rows if row["onboarded"]]
+
+        if filtered_user_rows:
+            st.dataframe(filtered_user_rows, width="stretch", hide_index=True)
+            st.download_button(
+                "Download users CSV",
+                data=_rows_to_csv(filtered_user_rows),
+                file_name="trovly_admin_users.csv",
+                mime="text/csv",
+            )
+        else:
+            st.info("No users match those filters.")
+
+        selected_options = [row["username"] for row in filtered_user_rows]
+        if selected_options:
+            selected_user = st.selectbox(
+                "Manage account",
+                selected_options,
+                key="admin_selected_user",
+            )
+        else:
+            selected_user = None
+
+        if selected_user:
+            selected_data = admin_users.get(selected_user, {})
+            selected_row = next(
+                (row for row in user_rows if row["username"] == selected_user),
+                {},
+            )
+            st.markdown("#### Account controls")
+            account_cols = st.columns(4)
+            with account_cols[0]:
+                st.metric("Plan", selected_row.get("tier", "free"))
+            with account_cols[1]:
+                st.metric("Applications", selected_row.get("applications", 0))
+            with account_cols[2]:
+                st.metric("Interviews", selected_row.get("interviews", 0))
+            with account_cols[3]:
+                st.metric("Resume chars", selected_row.get("resume_chars", 0))
+
+            selected_tier = selected_row.get("tier", "free")
+            if selected_tier not in plan_options:
+                selected_tier = "free"
+
+            with st.form("admin_account_form"):
+                form_cols = st.columns(2)
+                with form_cols[0]:
+                    new_tier = st.selectbox(
+                        "Plan",
+                        plan_options,
+                        index=plan_options.index(selected_tier),
+                    )
+                    grant_admin = st.checkbox(
+                        "Admin role",
+                        value=bool(
+                            selected_data.get("is_admin")
+                            or str(selected_data.get("role", "")).lower() in {"admin", "owner"}
+                        ),
+                    )
+                with form_cols[1]:
+                    onboarding_completed = st.checkbox(
+                        "Onboarding complete",
+                        value=bool(selected_data.get("onboarding_completed")),
+                    )
+                    unlock_account = st.checkbox(
+                        "Unlock account",
+                        value=False,
+                        disabled=not selected_row.get("locked", False),
+                    )
+
+                save_account = st.form_submit_button("Save account changes", type="primary")
+
+            if save_account:
+                ok, msg = update_user_admin_fields(
+                    selected_user,
+                    tier=new_tier,
+                    is_admin=grant_admin,
+                    onboarding_completed=onboarding_completed,
+                    unlock=unlock_account,
+                    actor=username,
+                )
+                if ok:
+                    track_event(
+                        username,
+                        "admin_user_updated",
+                        {
+                            "target_user": selected_user,
+                            "tier": new_tier,
+                            "admin": grant_admin,
+                            "unlock": unlock_account,
+                        },
+                    )
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.error(msg)
+
+            if st.button("Reset monthly usage", key=f"reset_usage_{selected_user}"):
+                ok, msg = reset_user_usage(selected_user, period=current_period)
+                if ok:
+                    track_event(
+                        username,
+                        "admin_usage_reset",
+                        {"target_user": selected_user, "period": current_period},
+                    )
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.error(msg)
+
+        st.markdown("#### Product analytics")
+        analytics_cols = st.columns(2)
+        with analytics_cols[0]:
+            funnel = get_funnel_metrics(days=30)
+            st.table(funnel)
+        with analytics_cols[1]:
+            retention = get_retention_metrics(days=30)
+            if retention:
+                st.line_chart({row["date"]: row["active_users"] for row in retention})
+            else:
+                st.info("No retention events yet.")
+
+        event_mix = build_event_mix(admin_events, days=30)
+        if event_mix:
+            st.markdown("#### Event mix")
+            st.bar_chart({row["event"]: row["events"] for row in event_mix})
+            st.dataframe(event_mix, width="stretch", hide_index=True)
+
+        recent_events = build_event_rows(admin_events, limit=50)
+        st.markdown("#### Recent events")
+        if recent_events:
+            st.dataframe(recent_events, width="stretch", hide_index=True)
+        else:
+            st.info("No analytics events recorded yet.")
+
+        recent_apps = build_application_rows(admin_applications, limit=50)
+        st.markdown("#### Recent applications")
+        if recent_apps:
+            st.dataframe(recent_apps, width="stretch", hide_index=True)
+        else:
+            st.info("No applications tracked yet.")
+
+        st.markdown("#### Storage")
+        st.table(build_store_status())
 
 with tab_recruiter:
     st.markdown("### Recruiter Mode")
