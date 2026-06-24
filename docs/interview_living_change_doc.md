@@ -1,14 +1,36 @@
 # Trovly AI Living Change Doc
 
-Last updated: May 22, 2026
+Last updated: June 22, 2026
 
 ## One-Minute Summary
 
 I repositioned Trovly AI from a broad "AI job search tool" into a focused career acceleration platform for mid-to-senior tech professionals targeting higher-paying roles.
 
-The work combined product strategy, conversion-focused UX, SaaS monetization, and practical engineering. I upgraded the public landing page, pricing model, onboarding flow, match explanations, resume optimization experience, alert preferences, analytics surfaces, and recruiter-mode direction. I also added implementation docs and schema recommendations for scaling the product into a more production-grade SaaS architecture.
+The work combined product strategy, conversion-focused UX, SaaS planning, and practical engineering. I upgraded the public landing page, onboarding flow, match explanations, resume optimization experience, alert preferences, analytics surfaces, and recruiter-mode direction. I also added implementation docs and schema recommendations for scaling the product into a more production-grade SaaS architecture.
 
 The goal was simple: make Trovly easier to sell, easier to understand, and more useful for people trying to land better tech jobs faster.
+
+## Current Product Decision: Pricing Paused
+
+On June 22, 2026, I removed the public pricing tiers, upgrade prompts, and plan-based limits because checkout was not connected yet. Leaving those controls visible created a dead-end experience: users could see an upgrade path but could not complete it.
+
+Trovly is currently open-access while the core workflow is validated. The underlying billing and tier architecture remains available for a future Stripe integration, but it is no longer exposed to users prematurely.
+
+Interview talking point:
+
+> I treated pricing as a product workflow, not just a design section. Because payment was not connected, I removed the visible tiers and temporarily opened access. That avoided frustrating users while preserving the technical foundation for monetization later.
+
+## Accessibility Pass: Button and Link Controls
+
+On June 22, 2026, I audited the public landing page, authenticated app, and legacy dashboard for accessible interactive controls.
+
+I added explicit ARIA labels to custom HTML links, accessible help descriptions to Streamlit buttons, contextual names for repeated actions like Apply and Track, visible keyboard focus outlines, and a separate Confirm delete action for destructive application removal.
+
+I also added an automated regression test that checks every Streamlit button or link has a non-empty name and description, every custom HTML link has an `aria-label`, and every app surface retains visible `:focus-visible` styling.
+
+Interview talking point:
+
+> I treated accessibility as a testable product requirement. Streamlit provides native button semantics, so I kept those controls and strengthened their accessible names, descriptions, focus states, and context. I then added a regression test so future UI changes cannot silently remove those protections.
 
 ## Why This Change Was Needed
 
@@ -71,7 +93,6 @@ The new landing page includes:
 - Testimonials.
 - Salary success stories.
 - FAQ.
-- Pricing cards.
 - Final conversion CTA.
 
 Example messaging:
@@ -85,20 +106,17 @@ Interview talking point:
 
 > I wanted the first screen to immediately show who the product is for, what outcome it drives, and why it is different from a generic job board. The match preview cards make the value tangible before a user even signs up.
 
-## 2. Premium Pricing and Monetization
+## 2. Monetization Exploration and Product Judgment
 
-I replaced the older broad tier model with clearer revenue-oriented plans:
+I designed a possible revenue model with Free, Pro, Career Hunter, and Offer Accelerator offers. Before connecting billing, I recognized that presenting those tiers would create an incomplete user journey.
 
-- Free: limited scans and resume analyses.
-- Pro: $29/month for unlimited scans, resume tailoring, ATS insights, alerts, and match explanations.
-- Career Hunter: $79/month for advanced recommendations, application analytics, priority alerts, recruiter targeting, and interview readiness.
-- Offer Accelerator: $199 one-time package for resume rewrite workflow, LinkedIn optimization, recruiter outreach, interview prep, and networking strategy.
+I therefore removed the visible pricing UI, upgrade buttons, paid-plan prompts, and artificial free-plan limits. The product is currently operating as open early access while I validate activation, engagement, and user outcomes.
 
-I also added upgrade-intent tracking so the app can capture conversion signals even before Stripe is fully connected.
+The dormant tier configuration and Stripe-ready architecture are preserved so monetization can return as a complete workflow rather than a placeholder.
 
 Interview talking point:
 
-> I mapped pricing to customer urgency. A casual user can validate the product for free, an active job seeker can pay monthly, and someone who wants a faster outcome can buy a higher-ticket offer.
+> I initially mapped pricing to customer urgency, then deliberately hid it until checkout and entitlement management are complete. That decision protected user trust and gave me time to validate which features actually deserve paid packaging.
 
 ## 3. Onboarding Flow
 
@@ -216,7 +234,7 @@ Tracked events include:
 - Apply click.
 - Application tracked.
 - Alert preferences saved.
-- Upgrade intent.
+- Feature engagement and repeat usage.
 
 The app now has an admin analytics tab with funnel and retention concepts.
 
@@ -226,7 +244,7 @@ The current version uses JSON-backed analytics because the app is still Streamli
 
 Interview talking point:
 
-> I wanted to make the product measurable. If we cannot see activation, scan completion, apply clicks, and upgrade intent, we cannot improve conversion or retention intelligently.
+> I wanted to make the product measurable. If we cannot see activation, scan completion, apply clicks, and repeat engagement, we cannot improve conversion or retention intelligently.
 
 ## 8. Recruiter Mode
 
@@ -310,7 +328,7 @@ Because it already worked and let me move fast. For this phase, the goal was spe
 
 ### Why centralize product copy?
 
-I created `product_strategy.py` so pricing, landing page copy, feature language, testimonials, FAQs, alert channels, upgrade prompts, and SEO categories are not scattered across the app.
+I created `product_strategy.py` so landing page copy, feature language, testimonials, FAQs, alert channels, future monetization concepts, and SEO categories are not scattered across the app.
 
 This makes the product easier to update and migrate later.
 
@@ -320,7 +338,7 @@ It gives users useful explanations immediately without making every match depend
 
 ### Why add analytics now?
 
-Because monetization decisions need data. Even simple event tracking makes it possible to see where users activate, stall, or show upgrade intent.
+Because future monetization decisions need data. Even simple event tracking makes it possible to see where users activate, stall, or return for repeated use.
 
 ### Why add schema docs before migration?
 
@@ -331,13 +349,13 @@ Because the product direction now includes subscriptions, alerts, referrals, rec
 Core app:
 
 - `auth.py`: public landing page, improved auth messaging, signup analytics.
-- `app_hosted.py`: Command Center, onboarding, scanning, resume AI, alerts, pricing, analytics, recruiter mode.
-- `usage_limits.py`: new tier limits and monetization model.
+- `app_hosted.py`: Command Center, onboarding, scanning, resume AI, alerts, analytics, and recruiter mode.
+- `usage_limits.py`: open early-access limits with dormant tier compatibility.
 - `alerts.py`: premium alert messaging and match intelligence.
 
 New modules:
 
-- `product_strategy.py`: centralized copy, pricing, features, FAQs, testimonials, upgrade prompts.
+- `product_strategy.py`: centralized copy, features, FAQs, testimonials, and future product concepts.
 - `job_intelligence.py`: match explanations, salary parsing, interview probability, readiness score.
 - `notification_engine.py`: alert preferences and channel templates.
 - `analytics.py`: lightweight funnel and retention tracking.
@@ -374,7 +392,7 @@ Current verification results:
 
 ### Short version
 
-I took an AI-powered job matching app and turned it into a more monetizable career acceleration SaaS. The original product had useful matching and tracking features, but the audience and value proposition were too broad. I narrowed the ICP to mid-to-senior tech professionals targeting high-paying roles, rebuilt the landing and onboarding experience around that audience, added premium pricing tiers, added explainable match intelligence, improved resume optimization workflows, expanded alert preferences, added analytics, and documented a scalable architecture for moving from Streamlit to a production SaaS stack.
+I took an AI-powered job matching app and turned it into a more focused career acceleration SaaS. The original product had useful matching and tracking features, but the audience and value proposition were too broad. I narrowed the ICP to mid-to-senior tech professionals targeting high-paying roles, rebuilt the landing and onboarding experience, added explainable match intelligence, improved resume optimization workflows, expanded alert preferences, added analytics, and documented a scalable architecture for moving from Streamlit to a production SaaS stack. I also removed the proposed pricing UI when I realized payment was not connected, keeping the experience honest while preserving the billing architecture for later.
 
 ### More technical version
 
@@ -396,11 +414,11 @@ I needed to sharpen the target customer, improve conversion, add monetizable pre
 
 ### Action
 
-I repositioned the product around mid-to-senior tech professionals targeting $120k-$300k roles. I rebuilt the landing page, added role-specific onboarding, created pricing tiers, added match explanations, resume optimization signals, alert preferences, upgrade prompts, analytics, recruiter-mode concepts, and a future database schema.
+I repositioned the product around mid-to-senior tech professionals targeting $120k-$300k roles. I rebuilt the landing page, added role-specific onboarding, match explanations, resume optimization signals, alert preferences, analytics, recruiter-mode concepts, and a future database schema. I evaluated paid tiers but removed them from the live product until the billing workflow is complete.
 
 ### Result
 
-The product now has a clearer ICP, stronger conversion copy, premium plan structure, more actionable match results, better retention hooks, and a documented path toward Stripe, Supabase, pgvector, notification providers, SEO content, and B2B recruiter monetization.
+The product now has a clearer ICP, stronger conversion copy, more actionable match results, better retention hooks, an honest open-access experience, and a documented path toward Stripe, Supabase, pgvector, notification providers, SEO content, and B2B recruiter monetization.
 
 ## Metrics I Would Track Next
 
@@ -411,9 +429,9 @@ The product now has a clearer ICP, stronger conversion copy, premium plan struct
 - Apply click rate.
 - Resume tailoring usage.
 - Alert opt-in rate.
-- Upgrade intent rate.
-- Free-to-Pro conversion.
-- Pro-to-Career-Hunter conversion.
+- Repeat weekly usage.
+- Weekly active users.
+- Four-week retention.
 - Interview rate by user cohort.
 - Offer rate by user cohort.
 - Average target salary.
@@ -440,4 +458,3 @@ The next highest-impact work would be:
 - I added analytics because SaaS growth needs measurable funnels.
 - I planned the future architecture without prematurely rewriting the app.
 - I focused on speed to revenue, retention, and clearer user outcomes.
-

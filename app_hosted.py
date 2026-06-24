@@ -51,21 +51,16 @@ from notification_engine import (
 )
 from product_strategy import (
     ALERT_CHANNELS,
-    B2B_PLANS,
     HOMEPAGE_COPY,
     ONBOARDING_PRESETS,
-    PLAN_CATALOG,
     SEO_CATEGORIES,
-    UPGRADE_PROMPTS,
 )
 from resume_parser import parse_resume_file
 from tracker import JobTracker
 from usage_limits import (
-    TIER_LIMITS,
     can_scan,
     can_tailor,
     get_current_period,
-    get_usage_summary,
     get_user_tier,
     increment_scans,
     increment_tailors,
@@ -247,7 +242,13 @@ a:hover {
     color: var(--blue) !important;
 }
 
-.app-hero, .premium-panel, .pricing-panel {
+button:focus-visible,
+a:focus-visible {
+    outline: 3px solid var(--blue) !important;
+    outline-offset: 3px !important;
+}
+
+.app-hero, .premium-panel {
     background: #ffffff;
     border: 1px solid var(--line);
     border-radius: 8px;
@@ -332,7 +333,6 @@ if username is None:
 user_data = get_user_data(username)
 user_is_admin = is_admin_user(username, user_data)
 tier = get_user_tier(user_data)
-summary = get_usage_summary(username, tier)
 tracker = JobTracker()
 tracked_jobs = tracker.get_all()
 application_stats = get_stats(username)
@@ -363,44 +363,6 @@ def _rows_to_csv(rows):
     return buffer.getvalue()
 
 
-def _upgrade_intent(plan_key, source):
-    save_user_data(
-        username,
-        {
-            "checkout_intent": {
-                "plan": plan_key,
-                "source": source,
-            }
-        },
-    )
-    track_event(username, "upgrade_intent", {"plan": plan_key, "source": source})
-    st.success("Upgrade intent saved. Connect Stripe Checkout to turn this into a paid conversion.")
-
-
-def _render_plan(plan_key, current_tier):
-    plan = PLAN_CATALOG[plan_key]
-    st.markdown(
-        """
-        <div class='pricing-panel'>
-            <div class='eyebrow'>{name}</div>
-            <h2>{price} <span style='font-size:0.9rem;color:#52616b'>{cadence}</span></h2>
-            <p>{summary}</p>
-        </div>
-        """.format(
-            name=escape(plan["name"]),
-            price=escape(plan["price"]),
-            cadence=escape(plan["cadence"]),
-            summary=escape(plan["summary"]),
-        ),
-        unsafe_allow_html=True,
-    )
-    for feature in plan["features"]:
-        st.markdown(f"- {feature}")
-    disabled = current_tier == plan_key or plan_key == "free"
-    if st.button(plan["cta"], key=f"upgrade_{plan_key}", disabled=disabled):
-        _upgrade_intent(plan_key, "pricing")
-
-
 with st.sidebar:
     st.markdown("## Trovly AI")
     st.caption(f"Logged in as {username}")
@@ -408,32 +370,15 @@ with st.sidebar:
         st.caption("Admin access")
     st.markdown("---")
 
-    st.markdown("**Plan:** {}".format(summary["tier_label"]))
-    if summary.get("tier_price"):
-        st.caption(summary["tier_price"])
-
-    if tier == "free":
-        if summary["scans_remaining"] == 0:
-            st.error("Scans: {} / {}".format(summary["scans_used"], summary["scans_limit"]))
-        else:
-            st.info("Scans: {} / {}".format(summary["scans_used"], summary["scans_limit"]))
-        st.caption(
-            "Resume analyses: {} / {}".format(summary["tailors_used"], summary["tailors_limit"])
-        )
-        prompt = UPGRADE_PROMPTS["scan_limit"]
-        st.markdown("**{}**".format(prompt["headline"]))
-        st.caption(prompt["body"])
-        if st.button(prompt["cta"], key="sidebar_upgrade"):
-            _upgrade_intent("pro", "sidebar")
-    else:
-        st.success("Premium career acceleration active")
+    st.markdown("**Early access**")
+    st.caption("All core career tools are currently available.")
 
     st.markdown("---")
     st.metric("Resume strength", "{}%".format(resume_strength["score"]))
     st.caption(resume_strength["level"])
     st.metric("Match quality", "{}%".format(career_metrics["match_quality"]))
     st.markdown("---")
-    if st.button("Log out"):
+    if st.button("Log out", help="Log out of your Trovly account"):
         logout()
 
 
@@ -449,7 +394,7 @@ st.markdown(
         eyebrow=escape(HOMEPAGE_COPY["eyebrow"]),
         headline=escape("Your Command Center for $150k+ Tech Roles"),
         subheadline=escape(
-            "Track match quality, resume readiness, alerts, applications, and upgrade paths from one revenue-focused career workspace."
+            "Track match quality, resume readiness, alerts, and applications from one focused career workspace."
         ),
         roles=_pill_row(
             user_data.get("target_roles") or ["Cloud", "DevOps", "AI", "Security", "Remote"]
@@ -466,7 +411,6 @@ tab_labels = [
     "Resume AI",
     "Applications",
     "Alerts",
-    "Pricing",
 ]
 if user_is_admin:
     tab_labels.append("Admin")
@@ -481,15 +425,14 @@ tabs = st.tabs(tab_labels)
     tab_tailor,
     tab_apps,
     tab_alerts,
-    tab_pricing,
-) = tabs[:8]
+) = tabs[:7]
 
 if user_is_admin:
-    tab_admin = tabs[8]
-    tab_recruiter = tabs[9]
+    tab_admin = tabs[7]
+    tab_recruiter = tabs[8]
 else:
     tab_admin = None
-    tab_recruiter = tabs[8]
+    tab_recruiter = tabs[7]
 
 with tab_dashboard:
     col1, col2, col3, col4 = st.columns(4)
@@ -553,7 +496,7 @@ with tab_dashboard:
             ),
             unsafe_allow_html=True,
         )
-        st.caption("Referral rewards: 1 free premium tailoring pack per qualified invite.")
+        st.caption("Referral rewards are planned for early-access invites.")
         st.caption(
             "LinkedIn share card: Top companies matching you, resume strength, and salary target."
         )
@@ -625,7 +568,11 @@ with tab_setup:
         default=user_data.get("target_roles") or [selected_preset.split(" / ")[0]],
     )
 
-    if st.button("Save career profile", type="primary"):
+    if st.button(
+        "Save career profile",
+        type="primary",
+        help="Save your resume, target roles, salary target, and search preferences",
+    ):
         queries_list = [q.strip() for q in queries_str.strip().split("\n") if q.strip()]
         save_user_data(
             username,
@@ -667,12 +614,14 @@ with tab_scan:
         with col_c:
             st.metric("Salary target", "${:,}".format(int(user_data.get("target_salary", 150000))))
 
-        if st.button("Run high-fit scan", type="primary"):
+        if st.button(
+            "Run high-fit scan",
+            type="primary",
+            help="Scan active job sources and rank roles against your career profile",
+        ):
             allowed, msg = can_scan(username, tier)
             if not allowed:
                 st.error(msg)
-                prompt = UPGRADE_PROMPTS["scan_limit"]
-                st.info("{} {}".format(prompt["headline"], prompt["body"]))
                 st.stop()
             increment_scans(username)
             with st.spinner(
@@ -700,16 +649,11 @@ with tab_scan:
 
                     if matched:
                         st.success(f"Found {len(matched)} matches worth reviewing.")
-                        max_matches = summary.get("max_matches_per_scan", -1)
-                        visible_matches = matched if max_matches == -1 else matched[:max_matches]
+                        visible_matches = matched
                         st.session_state["responsive_targets"] = rank_responsive_targets(
                             visible_matches,
                             applications=application_records,
                         )
-                        if max_matches != -1 and len(matched) > max_matches:
-                            st.info(
-                                f"Free plan shows your top {max_matches} matches. Upgrade to unlock the full list."
-                            )
 
                         for idx, (job, score) in enumerate(visible_matches):
                             intelligence = build_match_intelligence(
@@ -823,7 +767,13 @@ with tab_scan:
                                     strict=False,
                                 ):
                                     with link_col:
-                                        st.link_button(link["label"], link["url"])
+                                        st.link_button(
+                                            link["label"],
+                                            link["url"],
+                                            help="Open {} for {}".format(
+                                                link["label"], job.company or "this company"
+                                            ),
+                                        )
 
                                 with st.expander("Recruiter outreach draft", expanded=False):
                                     st.text_area(
@@ -842,14 +792,26 @@ with tab_scan:
 
                                 col_apply, col_track = st.columns(2)
                                 with col_apply:
-                                    if st.link_button("Apply", job.url):
+                                    if st.link_button(
+                                        "Apply to {}".format(job.company or "company"),
+                                        job.url,
+                                        help="Open the application page for {} at {}".format(
+                                            job.title, job.company or "this company"
+                                        ),
+                                    ):
                                         track_event(
                                             username,
                                             "job_apply_clicked",
                                             {"title": job.title, "company": job.company},
                                         )
                                 with col_track:
-                                    if st.button("Track application", key=f"track_{job.uid}"):
+                                    if st.button(
+                                        "Track application",
+                                        key=f"track_{job.uid}",
+                                        help="Add {} at {} to your application tracker".format(
+                                            job.title, job.company or "this company"
+                                        ),
+                                    ):
                                         success, app_msg, _ = add_application(
                                             username,
                                             job.title,
@@ -927,7 +889,11 @@ with tab_targets:
                 with col_b:
                     st.metric("Open target roles", target["job_count"])
                     if best_job.get("url"):
-                        st.link_button("Open posting", best_job["url"])
+                        st.link_button(
+                            "Open {} posting".format(target["company"]),
+                            best_job["url"],
+                            help="Open the {} job posting in a new page".format(target["company"]),
+                        )
 
                 st.markdown("**Why this target is responsive**")
                 for reason in target["reasons"]:
@@ -944,7 +910,11 @@ with tab_targets:
                 search_cols = st.columns(4)
                 for search_col, link in zip(search_cols, target["search_links"], strict=False):
                     with search_col:
-                        st.link_button(link["label"], link["url"])
+                        st.link_button(
+                            link["label"],
+                            link["url"],
+                            help="Open {} for {}".format(link["label"], target["company"]),
+                        )
 
                 st.text_area(
                     "Outreach note",
@@ -968,12 +938,14 @@ with tab_tailor:
             placeholder="Paste the full job description here...",
         )
 
-        if st.button("Analyze and tailor", type="primary"):
+        if st.button(
+            "Analyze and tailor",
+            type="primary",
+            help="Analyze your resume against the pasted job description",
+        ):
             allowed, msg = can_tailor(username, tier)
             if not allowed:
                 st.error(msg)
-                prompt = UPGRADE_PROMPTS["tailor_limit"]
-                st.info("{} {}".format(prompt["headline"], prompt["body"]))
                 st.stop()
             if jd_input and len(jd_input) > 30:
                 increment_tailors(username)
@@ -1102,7 +1074,11 @@ with tab_apps:
             new_salary = st.text_input("Salary", key="new_app_salary", max_chars=100)
             new_notes_short = st.text_input("Initial notes", key="new_app_notes", max_chars=500)
 
-        if st.button("Add to tracker", type="primary"):
+        if st.button(
+            "Add to tracker",
+            type="primary",
+            help="Add this job application to your application tracker",
+        ):
             success, msg, _ = add_application(
                 username,
                 new_title,
@@ -1195,21 +1171,30 @@ with tab_apps:
                 col_save, col_del = st.columns([1, 1])
                 with col_save:
                     if new_notes != current_notes and st.button(
-                        "Save notes", key=f"save_notes_{app['id']}"
+                        "Save notes",
+                        key=f"save_notes_{app['id']}",
+                        help="Save notes for {} at {}".format(app["title"], app["company"]),
                     ):
                         update_application(username, app["id"], {"notes": new_notes})
                         st.success("Notes saved")
                         st.rerun()
                 with col_del:
                     confirm_key = "confirm_del_{}".format(app["id"])
-                    if st.button("Delete", key="del_{}".format(app["id"]), type="secondary"):
-                        if st.session_state.get(confirm_key):
+                    delete_pending = st.session_state.get(confirm_key, False)
+                    delete_label = "Confirm delete" if delete_pending else "Delete application"
+                    if st.button(
+                        delete_label,
+                        key="del_{}".format(app["id"]),
+                        type="secondary",
+                        help="Delete the {} application at {}".format(app["title"], app["company"]),
+                    ):
+                        if delete_pending:
                             delete_application(username, app["id"])
                             st.session_state[confirm_key] = False
                             st.rerun()
                         else:
                             st.session_state[confirm_key] = True
-                            st.warning("Click Delete again to confirm")
+                            st.warning("Select Confirm delete to remove this application.")
 
                 history = app.get("status_history", [])
                 if len(history) > 1:
@@ -1218,7 +1203,7 @@ with tab_apps:
                         st.caption("{}: {}".format(h.get("date", "")[:10], h.get("status", "")))
 
 with tab_alerts:
-    st.markdown("### Premium alerts")
+    st.markdown("### Job alerts")
     st.markdown(
         "Control urgency thresholds for high-fit roles, newly posted jobs, salary matches, remote roles, and interview likelihood."
     )
@@ -1259,7 +1244,11 @@ with tab_alerts:
                 key="channel_{}".format(channel["key"]),
             )
 
-    if st.button("Save alert rules", type="primary"):
+    if st.button(
+        "Save alert rules",
+        type="primary",
+        help="Save your job alert channels and matching thresholds",
+    ):
         new_prefs = {
             "enabled": alerts_enabled,
             "channels": channel_values,
@@ -1279,23 +1268,6 @@ with tab_alerts:
     st.markdown("- High match detected.")
     st.markdown("- New $185k remote role matched your profile.")
 
-with tab_pricing:
-    st.markdown("### Pricing built for speed to offer")
-    st.markdown(
-        "Free validates fit. Pro removes limits. Career Hunter accelerates the search. Offer Accelerator upgrades the whole package."
-    )
-
-    plan_cols = st.columns(4)
-    for col, plan_key in zip(
-        plan_cols, ["free", "pro", "career_hunter", "offer_accelerator"], strict=False
-    ):
-        with col:
-            _render_plan(plan_key, tier)
-
-    st.markdown("### Upgrade prompts")
-    for prompt in UPGRADE_PROMPTS.values():
-        st.markdown("**{}** {}".format(prompt["headline"], prompt["body"]))
-
 if user_is_admin and tab_admin is not None:
     with tab_admin:
         st.markdown("### Admin panel")
@@ -1314,19 +1286,17 @@ if user_is_admin and tab_admin is not None:
             period=current_period,
         )
 
-        metric_row = st.columns(5)
+        metric_row = st.columns(4)
         with metric_row[0]:
             st.metric("Users", overview["total_users"], overview["new_users_30d"])
         with metric_row[1]:
             st.metric("Active 30d", overview["active_users_30d"])
         with metric_row[2]:
-            st.metric("Premium", overview["premium_users"])
-        with metric_row[3]:
             st.metric("Applications", overview["applications_total"])
-        with metric_row[4]:
+        with metric_row[3]:
             st.metric("Offers", overview["offers_total"])
 
-        metric_row = st.columns(5)
+        metric_row = st.columns(4)
         with metric_row[0]:
             st.metric("Admins", overview["admin_users"])
         with metric_row[1]:
@@ -1335,8 +1305,6 @@ if user_is_admin and tab_admin is not None:
             st.metric("Scans", overview["scans_this_month"])
         with metric_row[3]:
             st.metric("Tailors", overview["tailors_this_month"])
-        with metric_row[4]:
-            st.metric("Upgrade intents", overview["upgrade_intents_30d"])
 
         st.markdown("#### Users")
         user_rows = build_user_rows(
@@ -1346,20 +1314,13 @@ if user_is_admin and tab_admin is not None:
             admin_events,
             period=current_period,
         )
-        plan_options = [tier_key for tier_key in TIER_LIMITS if tier_key != "power"]
-        filter_cols = st.columns([1.4, 0.8, 0.8])
+        filter_cols = st.columns([1.4, 0.8])
         with filter_cols[0]:
             user_search = st.text_input("Search users", key="admin_user_search")
         with filter_cols[1]:
-            plan_filter = st.selectbox(
-                "Plan",
-                ["All"] + plan_options,
-                key="admin_plan_filter",
-            )
-        with filter_cols[2]:
             state_filter = st.selectbox(
                 "State",
-                ["All", "Admins", "Locked", "Premium", "Onboarded"],
+                ["All", "Admins", "Locked", "Onboarded"],
                 key="admin_state_filter",
             )
 
@@ -1371,14 +1332,10 @@ if user_is_admin and tab_admin is not None:
                 for row in filtered_user_rows
                 if needle in row["username"].lower() or needle in row["email"].lower()
             ]
-        if plan_filter != "All":
-            filtered_user_rows = [row for row in filtered_user_rows if row["tier"] == plan_filter]
         if state_filter == "Admins":
             filtered_user_rows = [row for row in filtered_user_rows if row["admin"]]
         elif state_filter == "Locked":
             filtered_user_rows = [row for row in filtered_user_rows if row["locked"]]
-        elif state_filter == "Premium":
-            filtered_user_rows = [row for row in filtered_user_rows if row["tier"] != "free"]
         elif state_filter == "Onboarded":
             filtered_user_rows = [row for row in filtered_user_rows if row["onboarded"]]
 
@@ -1389,6 +1346,7 @@ if user_is_admin and tab_admin is not None:
                 data=_rows_to_csv(filtered_user_rows),
                 file_name="trovly_admin_users.csv",
                 mime="text/csv",
+                help="Download the filtered user list as a CSV file",
             )
         else:
             st.info("No users match those filters.")
@@ -1410,28 +1368,17 @@ if user_is_admin and tab_admin is not None:
                 {},
             )
             st.markdown("#### Account controls")
-            account_cols = st.columns(4)
+            account_cols = st.columns(3)
             with account_cols[0]:
-                st.metric("Plan", selected_row.get("tier", "free"))
-            with account_cols[1]:
                 st.metric("Applications", selected_row.get("applications", 0))
-            with account_cols[2]:
+            with account_cols[1]:
                 st.metric("Interviews", selected_row.get("interviews", 0))
-            with account_cols[3]:
+            with account_cols[2]:
                 st.metric("Resume chars", selected_row.get("resume_chars", 0))
-
-            selected_tier = selected_row.get("tier", "free")
-            if selected_tier not in plan_options:
-                selected_tier = "free"
 
             with st.form("admin_account_form"):
                 form_cols = st.columns(2)
                 with form_cols[0]:
-                    new_tier = st.selectbox(
-                        "Plan",
-                        plan_options,
-                        index=plan_options.index(selected_tier),
-                    )
                     grant_admin = st.checkbox(
                         "Admin role",
                         value=bool(
@@ -1450,12 +1397,15 @@ if user_is_admin and tab_admin is not None:
                         disabled=not selected_row.get("locked", False),
                     )
 
-                save_account = st.form_submit_button("Save account changes", type="primary")
+                save_account = st.form_submit_button(
+                    "Save account changes",
+                    type="primary",
+                    help=f"Save access and onboarding changes for {selected_user}",
+                )
 
             if save_account:
                 ok, msg = update_user_admin_fields(
                     selected_user,
-                    tier=new_tier,
                     is_admin=grant_admin,
                     onboarding_completed=onboarding_completed,
                     unlock=unlock_account,
@@ -1467,7 +1417,6 @@ if user_is_admin and tab_admin is not None:
                         "admin_user_updated",
                         {
                             "target_user": selected_user,
-                            "tier": new_tier,
                             "admin": grant_admin,
                             "unlock": unlock_account,
                         },
@@ -1477,7 +1426,11 @@ if user_is_admin and tab_admin is not None:
                 else:
                     st.error(msg)
 
-            if st.button("Reset monthly usage", key=f"reset_usage_{selected_user}"):
+            if st.button(
+                "Reset monthly usage",
+                key=f"reset_usage_{selected_user}",
+                help=f"Reset scan and resume-analysis usage for {selected_user}",
+            ):
                 ok, msg = reset_user_usage(selected_user, period=current_period)
                 if ok:
                     track_event(
@@ -1531,37 +1484,18 @@ with tab_recruiter:
         "A B2B layer for staffing teams: candidate semantic search, resume ranking, fit explanations, and pipeline management."
     )
 
-    col_left, col_right = st.columns([1.1, 0.9])
-    with col_left:
-        st.markdown("#### Recruiter features")
-        for feature in [
-            "Candidate semantic search across resumes and role requirements",
-            "Resume ranking with explainable fit scores",
-            "Talent pipeline boards by role, stage, and recruiter",
-            "API access for ATS ingestion",
-            "White-label match reports for clients",
-        ]:
-            st.markdown(f"- {feature}")
+    st.markdown("#### Recruiter features")
+    for feature in [
+        "Candidate semantic search across resumes and role requirements",
+        "Resume ranking with explainable fit scores",
+        "Talent pipeline boards by role, stage, and recruiter",
+        "API access for ATS ingestion",
+        "White-label match reports for clients",
+    ]:
+        st.markdown(f"- {feature}")
 
-        st.markdown("#### SEO/content engine")
-        for category in SEO_CATEGORIES:
-            st.markdown("- **{}:** {}".format(category["title"], category["description"]))
+    st.info("Recruiter Mode is in private beta while the workflow is being validated.")
 
-    with col_right:
-        for plan in B2B_PLANS:
-            st.markdown(
-                """
-                <div class='pricing-panel'>
-                    <div class='eyebrow'>{name}</div>
-                    <h2>{price}</h2>
-                    <p>{cadence}</p>
-                    {features}
-                </div>
-                """.format(
-                    name=escape(plan["name"]),
-                    price=escape(plan["price"]),
-                    cadence=escape(plan["cadence"]),
-                    features="<br>".join(escape(feature) for feature in plan["features"]),
-                ),
-                unsafe_allow_html=True,
-            )
+    st.markdown("#### SEO/content engine")
+    for category in SEO_CATEGORIES:
+        st.markdown("- **{}:** {}".format(category["title"], category["description"]))

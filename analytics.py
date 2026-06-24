@@ -80,7 +80,6 @@ def get_funnel_metrics(days=30):
         ("scan_completed", "Scans completed"),
         ("job_apply_clicked", "Apply clicks"),
         ("application_tracked", "Applications tracked"),
-        ("upgrade_intent", "Upgrade intents"),
     ]
     rows = []
     previous = None

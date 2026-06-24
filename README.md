@@ -57,7 +57,7 @@ python main.py
 2. Run `--stats`, examine the histogram
 3. Raise the threshold until you're getting 5-15 matches per scan
 
-## Premium Alert Channels
+## Alert Channels
 
 The current delivery layer supports Discord and Telegram. The product UI and configuration template now include email, SMS, Slack, Discord, Telegram, and push preferences so production adapters can be connected without changing the user-facing contract.
 
@@ -133,6 +133,6 @@ Then register it in `SOURCE_MAP` and `ENABLED_SOURCES`.
 
 ## Growth and Monetization Plan
 
-See `docs/trovly_career_acceleration_plan.md` for the full roadmap, exact homepage and pricing copy, onboarding flows, subscription funnel, SEO engine, notification flows, dashboard wireframes, admin analytics, and recruiter platform architecture.
+See `docs/trovly_career_acceleration_plan.md` for the full roadmap, homepage copy, future monetization strategy, onboarding flows, SEO engine, notification flows, dashboard wireframes, admin analytics, and recruiter platform architecture.
 
 See `docs/database_schema.sql` for the recommended Supabase/Postgres schema with pgvector.

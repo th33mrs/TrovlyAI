@@ -76,6 +76,12 @@ div.stButton > button:hover {
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
+button:focus-visible,
+a:focus-visible {
+    outline: 3px solid #64ffda !important;
+    outline-offset: 3px !important;
+}
+
 .bullet-strong {
     background: rgba(100, 255, 218, 0.08);
     border-left: 3px solid #64ffda;
@@ -197,7 +203,13 @@ with tab1:
                         st.markdown("**Posted:** {}".format(job["posted_date"][:10]))
                     st.markdown("**Score:** {}".format(score_pct))
                 with col3:
-                    st.link_button("🔗 Apply", job["url"])
+                    st.link_button(
+                        "Apply to {}".format(job["company"]),
+                        job["url"],
+                        help="Open the application page for {} at {}".format(
+                            job["title"], job["company"]
+                        ),
+                    )
 
                 st.markdown("---")
                 col_s1, col_s2, col_s3 = st.columns([2, 2, 1])
@@ -211,13 +223,22 @@ with tab1:
                     notes = st.text_input("Notes", value=job.get("notes", ""), key="notes_{}".format(idx))
                 with col_s3:
                     st.markdown("<br>", unsafe_allow_html=True)
-                    if st.button("Save", key="save_{}".format(idx)):
+                    if st.button(
+                        "Save job update",
+                        key="save_{}".format(idx),
+                        help="Save status and notes for {} at {}".format(
+                            job["title"], job["company"]
+                        ),
+                    ):
                         tracker.update_status(job["uid"], new_status, notes)
                         st.success("Updated!")
                         st.rerun()
 
         st.markdown("---")
-        if st.button("📥 Export to CSV"):
+        if st.button(
+            "Prepare CSV export",
+            help="Prepare all tracked job matches for CSV download",
+        ):
             output = io.StringIO()
             fields = [
                 "title", "company", "location", "match_score", "status",
@@ -230,10 +251,11 @@ with tab1:
                 row["match_score"] = "{:.1%}".format(row["match_score"])
                 writer.writerow(row)
             st.download_button(
-                label="Download CSV",
+                label="Download job matches CSV",
                 data=output.getvalue(),
                 file_name="job_matches_{}.csv".format(datetime.now().strftime("%Y%m%d")),
                 mime="text/csv",
+                help="Download the tracked job matches as a CSV file",
             )
 
 # ─── Tab 2: Analytics ───────────────────────────────────────────────
@@ -316,7 +338,11 @@ with tab3:
         placeholder="Paste the full job description here...",
     )
 
-    if st.button("🔍 Analyze Match", type="primary"):
+    if st.button(
+        "Analyze resume match",
+        type="primary",
+        help="Compare your resume with the pasted job description",
+    ):
         if jd_input and len(jd_input) > 30:
             with st.spinner("Analyzing resume against job description..."):
                 result = tailor_resume(jd_input, verbose=False)
@@ -386,7 +412,10 @@ with tab3:
     if tracked:
         job_options = ["{} at {} ({:.0%})".format(j["title"], j["company"], j["match_score"]) for j in tracked]
         selected = st.selectbox("Select a tracked job", options=job_options)
-        if selected and st.button("Fetch & Analyze"):
+        if selected and st.button(
+            "Fetch and analyze posting",
+            help="Fetch and analyze the selected tracked job posting",
+        ):
             idx = job_options.index(selected)
             job = tracked[idx]
             st.info("Fetching JD from {}...".format(job["url"][:50]))
@@ -439,20 +468,29 @@ with tab4:
     st.markdown("#### Quick Actions")
     col_a1, col_a2, col_a3 = st.columns(3)
     with col_a1:
-        if st.button("🔄 Reset Seen DB"):
+        if st.button(
+            "Reset seen jobs",
+            help="Clear the database of previously seen job postings",
+        ):
             from pathlib import Path
             seen_path = Path(config.SEEN_JOBS_DB)
             if seen_path.exists():
                 seen_path.write_text("{}")
             st.success("Seen jobs database cleared!")
     with col_a2:
-        if st.button("🗑️ Clear Tracker"):
+        if st.button(
+            "Clear tracked jobs",
+            help="Permanently remove every job from the local tracker",
+        ):
             tracker.jobs = []
             tracker._save()
             st.success("Tracker cleared!")
             st.rerun()
     with col_a3:
-        if st.button("📊 Send Discord Summary"):
+        if st.button(
+            "Send Discord summary",
+            help="Send the current job tracker summary to the configured Discord channel",
+        ):
             try:
                 from dashboard import send_weekly_summary
                 send_weekly_summary(tracker)

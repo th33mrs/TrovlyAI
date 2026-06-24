@@ -11,13 +11,12 @@ logger = logging.getLogger("trovly.usage")
 
 TIER_LIMITS = {
     "free": {
-        "scans_per_month": 5,
-        "max_sources": 4,
-        "max_queries": 3,
-        "max_matches_per_scan": 10,
-        "tailor_per_month": 3,
-        "label": "Free",
-        "price": "$0",
+        "scans_per_month": -1,
+        "max_sources": -1,
+        "max_queries": -1,
+        "max_matches_per_scan": -1,
+        "tailor_per_month": -1,
+        "label": "Early Access",
     },
     "pro": {
         "scans_per_month": -1,
@@ -26,7 +25,6 @@ TIER_LIMITS = {
         "max_matches_per_scan": -1,
         "tailor_per_month": -1,
         "label": "Pro",
-        "price": "$29/mo",
     },
     "career_hunter": {
         "scans_per_month": -1,
@@ -35,7 +33,6 @@ TIER_LIMITS = {
         "max_matches_per_scan": -1,
         "tailor_per_month": -1,
         "label": "Career Hunter",
-        "price": "$79/mo",
     },
     "offer_accelerator": {
         "scans_per_month": -1,
@@ -44,7 +41,6 @@ TIER_LIMITS = {
         "max_matches_per_scan": -1,
         "tailor_per_month": -1,
         "label": "Offer Accelerator",
-        "price": "$199 one-time",
     },
     # Backward-compatible alias for older user records.
     "power": {
@@ -54,7 +50,6 @@ TIER_LIMITS = {
         "max_matches_per_scan": -1,
         "tailor_per_month": -1,
         "label": "Career Hunter",
-        "price": "$79/mo",
     },
 }
 
@@ -153,9 +148,7 @@ def can_scan(username, tier):
     if remaining <= 0:
         return (
             False,
-            "You have used all {} free scans this month. Upgrade to Pro for unlimited scans, match explanations, and high-fit alerts.".format(
-                limits["scans_per_month"]
-            ),
+            "You have reached the current scan limit. Please try again next month.",
         )
 
     return True, "{} of {} free scans remaining this month".format(
@@ -175,9 +168,7 @@ def can_tailor(username, tier):
     if remaining <= 0:
         return (
             False,
-            "You have used all {} free resume analyses this month. Upgrade to Pro for unlimited tailoring and ATS optimization.".format(
-                limits["tailor_per_month"]
-            ),
+            "You have reached the current resume analysis limit. Please try again next month.",
         )
 
     return True, "{} of {} free resume analyses remaining".format(
@@ -194,7 +185,6 @@ def get_usage_summary(username, tier):
     return {
         "tier": tier,
         "tier_label": limits["label"],
-        "tier_price": limits.get("price", ""),
         "scans_used": scans_used,
         "scans_limit": limits["scans_per_month"],
         "tailors_used": tailors_used,

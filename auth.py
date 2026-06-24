@@ -31,7 +31,6 @@ from product_strategy import (
     FEATURE_GRID,
     HOMEPAGE_COPY,
     HOW_IT_WORKS,
-    PLAN_CATALOG,
     SOCIAL_PROOF,
     SUCCESS_STORIES,
     TESTIMONIALS,
@@ -414,39 +413,6 @@ def _cards(items, class_name):
     return "".join(html)
 
 
-def _pricing_cards():
-    cards = []
-    for plan_key in ["free", "pro", "career_hunter", "offer_accelerator"]:
-        plan = PLAN_CATALOG[plan_key]
-        features = "".join(f"<li>{escape(feature)}</li>" for feature in plan["features"])
-        featured = " featured-plan" if plan.get("featured") else ""
-        annual = (
-            "<p class='plan-note'>{}</p>".format(escape(plan.get("annual_note", "")))
-            if plan.get("annual_note")
-            else ""
-        )
-        cards.append(
-            "<div class='pricing-card{featured}'>"
-            "<div class='plan-name'>{name}</div>"
-            "<div class='plan-price'>{price}<span>{cadence}</span></div>"
-            "<p>{summary}</p>"
-            "{annual}"
-            "<ul>{features}</ul>"
-            "<a class='plan-cta' href='#signup'>{cta}</a>"
-            "</div>".format(
-                featured=featured,
-                name=escape(plan["name"]),
-                price=escape(plan["price"]),
-                cadence=escape(plan["cadence"]),
-                summary=escape(plan["summary"]),
-                annual=annual,
-                features=features,
-                cta=escape(plan["cta"]),
-            )
-        )
-    return "".join(cards)
-
-
 def _render_public_landing():
     """Render the public positioning and conversion page before auth."""
     _render_html(
@@ -499,7 +465,7 @@ def _render_public_landing():
             gap: 12px;
             margin: 28px 0 10px;
         }
-        .hero-actions a, .plan-cta {
+        .hero-actions a {
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -510,7 +476,7 @@ def _render_public_landing():
             font-weight: 700;
             border: 1px solid #101418;
         }
-        .hero-actions .primary, .plan-cta {
+        .hero-actions .primary {
             background: #101418;
             color: #ffffff !important;
         }
@@ -518,6 +484,10 @@ def _render_public_landing():
             background: #ffffff;
             color: #101418 !important;
             border-color: #c9d5d8;
+        }
+        .trovly-public a:focus-visible {
+            outline: 3px solid #2563eb;
+            outline-offset: 3px;
         }
         .proof-row, .logo-row {
             display: flex;
@@ -594,30 +564,30 @@ def _render_public_landing():
             max-width: 760px;
             line-height: 1.65;
         }
-        .card-grid, .pricing-grid, .story-grid {
+        .card-grid, .story-grid {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 14px;
             margin-top: 22px;
         }
-        .feature-card, .how-card, .story-card, .testimonial-card, .pricing-card, .faq-card {
+        .feature-card, .how-card, .story-card, .testimonial-card, .faq-card {
             border: 1px solid #dce4e8;
             border-radius: 8px;
             background: #ffffff;
             padding: 18px;
             box-shadow: 0 10px 34px rgba(16, 24, 40, 0.05);
         }
-        .feature-card h3, .how-card h3, .story-card h3, .testimonial-card h3, .pricing-card h3 {
+        .feature-card h3, .how-card h3, .story-card h3, .testimonial-card h3 {
             color: #101418 !important;
             margin: 6px 0 8px;
             font-size: 1.05rem;
         }
-        .feature-card p, .how-card p, .story-card p, .testimonial-card p, .pricing-card p, .faq-card p {
+        .feature-card p, .how-card p, .story-card p, .testimonial-card p, .faq-card p {
             color: #52616b;
             line-height: 1.55;
             margin: 0;
         }
-        .card-kicker, .plan-name {
+        .card-kicker {
             color: #087f5b;
             font-size: 0.78rem;
             font-weight: 800;
@@ -638,37 +608,6 @@ def _render_public_landing():
         }
         .resume-box strong { color: #101418; }
         .resume-box p { color: #52616b; line-height: 1.6; }
-        .pricing-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-        .pricing-card {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        .featured-plan {
-            border-color: #2dd4bf;
-            box-shadow: 0 18px 44px rgba(45, 212, 191, 0.16);
-        }
-        .plan-price {
-            color: #101418;
-            font-size: 2rem;
-            font-weight: 800;
-        }
-        .plan-price span {
-            color: #52616b;
-            font-size: 0.9rem;
-            font-weight: 600;
-            margin-left: 6px;
-        }
-        .plan-note {
-            color: #087f5b !important;
-            font-weight: 700;
-        }
-        .pricing-card ul {
-            padding-left: 18px;
-            color: #29343b;
-            line-height: 1.7;
-            flex: 1;
-        }
         .faq-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -712,7 +651,7 @@ def _render_public_landing():
         @media (max-width: 900px) {
             .public-hero { padding: 28px; }
             .hero-grid, .resume-example, .faq-grid { grid-template-columns: 1fr; }
-            .card-grid, .pricing-grid, .story-grid { grid-template-columns: 1fr; }
+            .card-grid, .story-grid { grid-template-columns: 1fr; }
             .cta-band { align-items: flex-start; flex-direction: column; }
         }
         </style>
@@ -756,8 +695,8 @@ def _render_public_landing():
                         <h1>{headline}</h1>
                         <p>{subheadline}</p>
                         <div class='hero-actions'>
-                            <a class='primary' href='#signup'>{primary_cta}</a>
-                            <a class='secondary' href='#pricing'>See pricing</a>
+                            <a class='primary' href='#signup' aria-label='Start a free Trovly career scan by creating an account'>{primary_cta}</a>
+                            <a class='secondary' href='#how-it-works' aria-label='Learn how Trovly works'>See how it works</a>
                         </div>
                         <p>{proof_line}</p>
                         <div class='proof-row'>{proof}</div>
@@ -790,14 +729,14 @@ def _render_public_landing():
                 <div class='logo-row'>{logos}</div>
             </section>
 
-            <section class='section'>
+            <section id='how-it-works' class='section'>
                 <div class='eyebrow'>How it works</div>
                 <h2>From resume to targeted applications in minutes.</h2>
                 <div class='card-grid'>{how_cards}</div>
             </section>
 
             <section class='section'>
-                <div class='eyebrow'>Premium copilot features</div>
+                <div class='eyebrow'>Career copilot features</div>
                 <h2>Everything needed to turn high-fit jobs into interviews.</h2>
                 <div class='card-grid'>{feature_cards}</div>
             </section>
@@ -829,12 +768,6 @@ def _render_public_landing():
                 <div class='card-grid'>{testimonial_cards}</div>
             </section>
 
-            <section id='pricing' class='section'>
-                <div class='eyebrow'>Pricing</div>
-                <h2>Pick the level of acceleration you need.</h2>
-                <div class='pricing-grid'>{pricing_cards}</div>
-            </section>
-
             <section class='section'>
                 <div class='eyebrow'>FAQ</div>
                 <h2>Built for serious tech searches.</h2>
@@ -846,7 +779,7 @@ def _render_public_landing():
                     <h2>Stop applying blindly.</h2>
                     <p>Run a focused career scan and see which roles deserve your next tailored application.</p>
                 </div>
-                <a href='#signup'>Create your free account</a>
+                <a href='#signup' aria-label='Create a free Trovly account'>Create your free account</a>
             </div>
         </div>
         """.format(
@@ -861,7 +794,6 @@ def _render_public_landing():
             feature_cards=feature_cards,
             story_cards=story_cards,
             testimonial_cards=testimonial_cards,
-            pricing_cards=_pricing_cards(),
             faq_cards=faq_cards,
         )
     )
@@ -896,7 +828,12 @@ def login_page():
             login_user = st.text_input("Username", key="login_user", max_chars=32)
             login_pass = st.text_input("Password", type="password", key="login_pass", max_chars=128)
 
-            if st.button("Log in", type="primary", use_container_width=True):
+            if st.button(
+                "Log in",
+                type="primary",
+                use_container_width=True,
+                help="Log in to your Trovly account",
+            ):
                 success, msg = check_credentials(login_user.strip(), login_pass)
                 if success:
                     st.session_state.authenticated = True
@@ -925,7 +862,12 @@ def login_page():
                 "Confirm password", type="password", key="reg_pass2", max_chars=128
             )
 
-            if st.button("Create account", type="primary", use_container_width=True):
+            if st.button(
+                "Create account",
+                type="primary",
+                use_container_width=True,
+                help="Create a new Trovly account",
+            ):
                 if reg_pass != reg_pass2:
                     st.error("Passwords don't match")
                 else:
@@ -962,7 +904,11 @@ def login_page():
                     max_chars=254,
                 )
 
-                if st.button("Find username", use_container_width=True):
+                if st.button(
+                    "Find username",
+                    use_container_width=True,
+                    help="Find the username associated with this email address",
+                ):
                     success, msg, recovered_username = find_username_by_email(recovery_email)
                     if success:
                         st.success(f"Username: {recovered_username}")
@@ -985,7 +931,12 @@ def login_page():
                     max_chars=128,
                 )
 
-                if st.button("Reset password", type="primary", use_container_width=True):
+                if st.button(
+                    "Reset password",
+                    type="primary",
+                    use_container_width=True,
+                    help="Reset the password for this Trovly account",
+                ):
                     if reset_pass != reset_pass2:
                         st.error("Passwords don't match")
                     else:
