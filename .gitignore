@@ -20,6 +20,7 @@ applications.json
 users.json
 usage.json
 analytics_events.json
+auto_apply_queue.json
 job_matches.csv
 tailored_*.txt
 *.session

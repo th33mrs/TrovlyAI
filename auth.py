@@ -292,6 +292,8 @@ def register_user(username, password, email):
         "last_login": None,
         "failed_attempts": 0,
         "locked_until": None,
+        "role": "user",
+        "is_admin": False,
         "tier": "free",
         "resume": "",
         "queries": [],
@@ -300,6 +302,18 @@ def register_user(username, password, email):
         "target_salary": 150000,
         "target_roles": [],
         "alert_preferences": DEFAULT_ALERT_PREFS,
+        "auto_apply_settings": {
+            "enabled": False,
+            "min_match_score": 0.80,
+            "max_post_age_hours": 24,
+            "weekly_target": 200,
+            "weekly_hard_cap": 250,
+            "daily_hard_cap": 50,
+            "consent": False,
+            "consent_at": None,
+            "excluded_keywords": [],
+        },
+        "application_profile": {},
         "onboarding_completed": False,
     }
     save_users(users)
@@ -375,9 +389,11 @@ def save_user_data(username, data):
             "created_at",
             "email",
             "failed_attempts",
+            "is_admin",
             "last_password_reset",
             "locked_until",
             "password_hash",
+            "role",
         }
         safe_data = {k: v for k, v in data.items() if k not in protected_fields}
         users[username].update(safe_data)

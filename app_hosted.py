@@ -3,6 +3,7 @@ Trovly - Hosted App
 Run with: streamlit run app_hosted.py
 """
 
+from datetime import datetime, timezone
 from html import escape
 
 import streamlit as st
@@ -23,6 +24,18 @@ from applications import (
     update_application,
 )
 from auth import get_user_data, login_page, logout, save_user_data
+from auto_apply import (
+    ACTIVE_QUEUE_STATUSES,
+    DEFAULT_AUTO_APPLY_SETTINGS,
+    enqueue_matches,
+    list_queue,
+    update_queue_item,
+    validate_application_profile,
+    weekly_progress,
+)
+from auto_apply import (
+    normalize_settings as normalize_auto_apply_settings,
+)
 from job_intelligence import (
     build_match_intelligence,
     build_responsiveness_intelligence,
@@ -54,6 +67,8 @@ from usage_limits import (
     increment_scans,
     increment_tailors,
 )
+
+UTC = timezone.utc  # noqa: UP017 - Python 3.10 does not provide datetime.UTC.
 
 st.set_page_config(
     page_title="Trovly",
@@ -314,6 +329,20 @@ if username is None:
     st.stop()
 
 user_data = get_user_data(username)
+is_admin = bool(user_data.get("is_admin")) or user_data.get("role") == "admin"
+auto_apply_settings = normalize_auto_apply_settings(
+    user_data.get("auto_apply_settings", DEFAULT_AUTO_APPLY_SETTINGS)
+)
+application_profile = {
+    "full_name": "",
+    "email": user_data.get("email", ""),
+    "phone": "",
+    "location": "",
+    "work_authorization": "",
+    "linkedin_url": "",
+    "portfolio_url": "",
+    **user_data.get("application_profile", {}),
+}
 tier = get_user_tier(user_data)
 summary = get_usage_summary(username, tier)
 tracker = JobTracker()
@@ -374,9 +403,79 @@ def _render_plan(plan_key, current_tier):
         _upgrade_intent(plan_key, "pricing")
 
 
+def _run_match_pipeline():
+    import config_runtime as config
+    from matcher import match_jobs, reload_resume
+    from sources import fetch_all_jobs
+
+    config.RESUME_TEXT = user_data.get("resume", "")
+    config.SEARCH_QUERIES = user_data.get("queries", [])
+    config.SIMILARITY_THRESHOLD = user_data.get("threshold", 0.55)
+    config.REMOTE_ONLY = user_data.get("remote_only", True)
+    config.SALARY_FLOOR = int(user_data.get("target_salary", 150000) * 0.85)
+
+    reload_resume()
+    jobs = fetch_all_jobs()
+    matched = match_jobs(jobs)
+    return jobs, matched
+
+
+def _visible_matches(matched):
+    max_matches = summary.get("max_matches_per_scan", -1)
+    return matched if max_matches == -1 else matched[:max_matches]
+
+
+def _activate_auto_apply_now(settings):
+    jobs, matched = _run_match_pipeline()
+    visible_matches = _visible_matches(matched)
+    queue_result = enqueue_matches(
+        username,
+        visible_matches,
+        settings=settings,
+        existing_applications=list_applications(username),
+    )
+    st.session_state["responsive_targets"] = rank_responsive_targets(
+        visible_matches,
+        applications=list_applications(username),
+    )
+    result = {
+        **queue_result,
+        "fetched_count": len(jobs),
+        "matched_count": len(matched),
+        "evaluated_count": len(visible_matches),
+    }
+    track_event(
+        username,
+        "auto_apply_immediate_activation",
+        {
+            "fetched": result["fetched_count"],
+            "matched": result["matched_count"],
+            "evaluated": result["evaluated_count"],
+            "queued": result["queued_count"],
+            "skipped": result["skipped_count"],
+            "duplicates": result["duplicates"],
+        },
+    )
+    return result
+
+
+def _store_auto_apply_notice(result):
+    st.session_state["auto_apply_notice"] = {
+        "fetched_count": result["fetched_count"],
+        "matched_count": result["matched_count"],
+        "evaluated_count": result["evaluated_count"],
+        "queued_count": result["queued_count"],
+        "skipped_count": result["skipped_count"],
+        "duplicates": result["duplicates"],
+        "skipped": result["skipped"][:3],
+    }
+
+
 with st.sidebar:
     st.markdown("## Trovly AI")
     st.caption(f"Logged in as {username}")
+    if is_admin:
+        st.caption("Admin access")
     st.markdown("---")
 
     st.markdown("**Plan:** {}".format(summary["tier_label"]))
@@ -429,31 +528,33 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-(
-    tab_dashboard,
-    tab_setup,
-    tab_scan,
-    tab_targets,
-    tab_tailor,
-    tab_apps,
-    tab_alerts,
-    tab_pricing,
-    tab_admin,
-    tab_recruiter,
-) = st.tabs(
-    [
-        "Command Center",
-        "Onboarding",
-        "Match Scan",
-        "Responsive Targets",
-        "Resume AI",
-        "Applications",
-        "Alerts",
-        "Pricing",
-        "Analytics",
-        "Recruiter Mode",
-    ]
-)
+tab_labels = [
+    "Command Center",
+    "Onboarding",
+    "Match Scan",
+    "Auto Apply",
+    "Responsive Targets",
+    "Resume AI",
+    "Applications",
+    "Alerts",
+    "Pricing",
+]
+if is_admin:
+    tab_labels.append("Analytics")
+tab_labels.append("Recruiter Mode")
+
+tab_map = dict(zip(tab_labels, st.tabs(tab_labels), strict=False))
+tab_dashboard = tab_map["Command Center"]
+tab_setup = tab_map["Onboarding"]
+tab_scan = tab_map["Match Scan"]
+tab_auto_apply = tab_map["Auto Apply"]
+tab_targets = tab_map["Responsive Targets"]
+tab_tailor = tab_map["Resume AI"]
+tab_apps = tab_map["Applications"]
+tab_alerts = tab_map["Alerts"]
+tab_pricing = tab_map["Pricing"]
+tab_admin = tab_map.get("Analytics")
+tab_recruiter = tab_map["Recruiter Mode"]
 
 with tab_dashboard:
     col1, col2, col3, col4 = st.columns(4)
@@ -643,19 +744,7 @@ with tab_scan:
                 "Scanning fresh roles, scoring fit, salary, gaps, and interview likelihood..."
             ):
                 try:
-                    import config_runtime as config
-                    from matcher import match_jobs, reload_resume
-                    from sources import fetch_all_jobs
-
-                    config.RESUME_TEXT = user_data.get("resume", "")
-                    config.SEARCH_QUERIES = user_data.get("queries", [])
-                    config.SIMILARITY_THRESHOLD = user_data.get("threshold", 0.55)
-                    config.REMOTE_ONLY = user_data.get("remote_only", True)
-                    config.SALARY_FLOOR = int(user_data.get("target_salary", 150000) * 0.85)
-
-                    reload_resume()
-                    jobs = fetch_all_jobs()
-                    matched = match_jobs(jobs)
+                    jobs, matched = _run_match_pipeline()
                     track_event(
                         username,
                         "scan_completed",
@@ -665,7 +754,30 @@ with tab_scan:
                     if matched:
                         st.success(f"Found {len(matched)} matches worth reviewing.")
                         max_matches = summary.get("max_matches_per_scan", -1)
-                        visible_matches = matched if max_matches == -1 else matched[:max_matches]
+                        visible_matches = _visible_matches(matched)
+                        if auto_apply_settings["enabled"] and auto_apply_settings["consent"]:
+                            queue_result = enqueue_matches(
+                                username,
+                                visible_matches,
+                                settings=auto_apply_settings,
+                                existing_applications=application_records,
+                            )
+                            track_event(
+                                username,
+                                "auto_apply_matches_evaluated",
+                                {
+                                    "queued": queue_result["queued_count"],
+                                    "skipped": queue_result["skipped_count"],
+                                    "duplicates": queue_result["duplicates"],
+                                },
+                            )
+                            if queue_result["queued_count"]:
+                                st.info(
+                                    "Auto Apply queued {} eligible role{} for submission.".format(
+                                        queue_result["queued_count"],
+                                        "" if queue_result["queued_count"] == 1 else "s",
+                                    )
+                                )
                         st.session_state["responsive_targets"] = rank_responsive_targets(
                             visible_matches,
                             applications=application_records,
@@ -840,6 +952,350 @@ with tab_scan:
 
                 except Exception as e:
                     st.error(f"Scan failed: {e}")
+
+with tab_auto_apply:
+    st.markdown("### Auto Apply control center")
+    st.markdown(
+        "Automatically queue fresh, high-fit roles immediately while keeping identity, legal, and screening answers under your control."
+    )
+
+    auto_apply_notice = st.session_state.pop("auto_apply_notice", None)
+    if auto_apply_notice:
+        if auto_apply_notice.get("message"):
+            st.success(auto_apply_notice["message"])
+        else:
+            st.success(
+                "Auto Apply is live. Scanned {fetched_count} jobs, found {matched_count} matches, evaluated {evaluated_count}, and queued {queued_count} eligible role{suffix} now.".format(
+                    suffix="" if auto_apply_notice["queued_count"] == 1 else "s",
+                    **auto_apply_notice,
+                )
+            )
+        if auto_apply_notice["duplicates"]:
+            st.info(
+                "{} role{} already existed in the queue and was not duplicated.".format(
+                    auto_apply_notice["duplicates"],
+                    "" if auto_apply_notice["duplicates"] == 1 else "s",
+                )
+            )
+        if auto_apply_notice["skipped_count"]:
+            with st.expander("Why some roles were skipped", expanded=False):
+                for skipped in auto_apply_notice["skipped"]:
+                    st.markdown(
+                        "**{} at {}**: {}".format(
+                            skipped["title"] or "Untitled role",
+                            skipped["company"] or "Unknown company",
+                            "; ".join(skipped["blockers"]),
+                        )
+                    )
+
+    auto_apply_error = st.session_state.pop("auto_apply_error", None)
+    if auto_apply_error:
+        st.error(auto_apply_error)
+
+    progress = weekly_progress(username, auto_apply_settings)
+    progress_columns = st.columns(5)
+    progress_columns[0].metric(
+        "Submitted this week",
+        progress["submitted_this_week"],
+        "Target {}".format(progress["weekly_target"]),
+    )
+    progress_columns[1].metric("Remaining", progress["remaining"])
+    progress_columns[2].metric("Daily pace", progress["daily_pace"])
+    progress_columns[3].metric("Queued", progress["queued"])
+    progress_columns[4].metric("Needs review", progress["needs_review"])
+
+    if progress["submitted_this_week"] < progress["weekly_target"]:
+        available = progress["queued"] + progress["needs_review"]
+        if available < progress["remaining"]:
+            st.warning(
+                "The current queue is {} roles short of the weekly target. Run fresh scans to add more eligible postings.".format(
+                    progress["remaining"] - available
+                )
+            )
+    else:
+        st.success("Weekly application target reached. The hard cap still prevents runaway volume.")
+
+    run_now_disabled = not (auto_apply_settings["enabled"] and auto_apply_settings["consent"])
+    if st.button(
+        "Run Auto Apply now",
+        type="primary",
+        disabled=run_now_disabled,
+        help="Immediately scan fresh jobs and queue roles that clear your saved Auto Apply rules.",
+    ):
+        missing_profile = validate_application_profile(application_profile)
+        if not user_data.get("resume"):
+            st.error("Add a resume in Onboarding before running Auto Apply.")
+        elif missing_profile:
+            st.error("Complete: {}.".format(", ".join(missing_profile)))
+        else:
+            with st.spinner("Auto Apply is scanning and queueing eligible roles now..."):
+                try:
+                    activation_result = _activate_auto_apply_now(auto_apply_settings)
+                    _store_auto_apply_notice(activation_result)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Immediate Auto Apply run failed: {e}")
+    if run_now_disabled:
+        st.caption("Enable Auto Apply, complete consent, and save settings to run it immediately.")
+
+    st.markdown("#### Rules and safeguards")
+    settings_left, settings_right = st.columns(2)
+    with settings_left:
+        auto_apply_enabled = st.toggle(
+            "Enable Auto Apply",
+            value=auto_apply_settings["enabled"],
+            help="Eligible matches are queued immediately when saved, then after each future scan.",
+        )
+        auto_min_match_percent = st.slider(
+            "Match score must be over",
+            min_value=80,
+            max_value=95,
+            value=max(int(auto_apply_settings["min_match_score"] * 100), 80),
+            step=1,
+            format="%d%%",
+            help="A score equal to the threshold does not qualify.",
+        )
+        max_post_age = st.number_input(
+            "Maximum posting age in hours",
+            min_value=1,
+            max_value=72,
+            value=auto_apply_settings["max_post_age_hours"],
+            step=1,
+        )
+    with settings_right:
+        weekly_target = st.number_input(
+            "Weekly application target",
+            min_value=50,
+            max_value=500,
+            value=auto_apply_settings["weekly_target"],
+            step=25,
+        )
+        weekly_hard_cap = st.number_input(
+            "Weekly hard cap",
+            min_value=int(weekly_target),
+            max_value=750,
+            value=max(auto_apply_settings["weekly_hard_cap"], int(weekly_target)),
+            step=25,
+            help="Trovly never submits above this limit without a new setting change.",
+        )
+        daily_hard_cap = st.number_input(
+            "Daily hard cap",
+            min_value=10,
+            max_value=100,
+            value=auto_apply_settings["daily_hard_cap"],
+            step=5,
+        )
+
+    excluded_keywords = st.text_input(
+        "Never apply when the posting contains",
+        value=", ".join(auto_apply_settings["excluded_keywords"]),
+        placeholder="commission only, unpaid, active clearance required",
+        help="Separate phrases with commas.",
+    )
+
+    st.markdown("#### Application identity")
+    identity_left, identity_right = st.columns(2)
+    with identity_left:
+        full_name = st.text_input("Full legal name", value=application_profile["full_name"])
+        application_email = st.text_input("Application email", value=application_profile["email"])
+        phone = st.text_input("Phone", value=application_profile["phone"])
+        location = st.text_input("Location", value=application_profile["location"])
+    with identity_right:
+        authorization_options = [
+            "",
+            "Authorized to work in the United States",
+            "Requires employer sponsorship",
+            "Review each application",
+        ]
+        saved_authorization = application_profile["work_authorization"]
+        authorization_index = (
+            authorization_options.index(saved_authorization)
+            if saved_authorization in authorization_options
+            else 0
+        )
+        work_authorization = st.selectbox(
+            "Work authorization",
+            authorization_options,
+            index=authorization_index,
+        )
+        linkedin_url = st.text_input("LinkedIn URL", value=application_profile["linkedin_url"])
+        portfolio_url = st.text_input("Portfolio URL", value=application_profile["portfolio_url"])
+
+    consent = st.checkbox(
+        "I confirm this information is accurate and authorize Trovly to submit applications that meet these rules.",
+        value=auto_apply_settings["consent"],
+    )
+    st.caption(
+        "Trovly never answers demographic questions, invents qualifications, bypasses CAPTCHAs, or counts an application without confirmation from the job site."
+    )
+
+    if st.button(
+        "Save Auto Apply settings",
+        type="primary",
+        help="Save eligibility rules, identity, consent, and weekly limits.",
+    ):
+        updated_profile = {
+            "full_name": full_name.strip(),
+            "email": application_email.strip(),
+            "phone": phone.strip(),
+            "location": location.strip(),
+            "work_authorization": work_authorization,
+            "linkedin_url": linkedin_url.strip(),
+            "portfolio_url": portfolio_url.strip(),
+        }
+        missing_profile = validate_application_profile(updated_profile)
+        if auto_apply_enabled and not user_data.get("resume"):
+            st.error("Add a resume in Onboarding before enabling Auto Apply.")
+        elif auto_apply_enabled and missing_profile:
+            st.error("Complete: {}.".format(", ".join(missing_profile)))
+        elif auto_apply_enabled and not consent:
+            st.error("Authorization is required before Auto Apply can be enabled.")
+        else:
+            updated_settings = normalize_auto_apply_settings(
+                {
+                    "enabled": auto_apply_enabled,
+                    "min_match_score": auto_min_match_percent / 100,
+                    "max_post_age_hours": int(max_post_age),
+                    "weekly_target": int(weekly_target),
+                    "weekly_hard_cap": int(weekly_hard_cap),
+                    "daily_hard_cap": int(daily_hard_cap),
+                    "consent": consent,
+                    "consent_at": (
+                        auto_apply_settings.get("consent_at") or datetime.now(UTC).isoformat()
+                        if consent
+                        else None
+                    ),
+                    "excluded_keywords": [
+                        value.strip() for value in excluded_keywords.split(",") if value.strip()
+                    ],
+                }
+            )
+            save_user_data(
+                username,
+                {
+                    "auto_apply_settings": updated_settings,
+                    "application_profile": updated_profile,
+                },
+            )
+            track_event(
+                username,
+                "auto_apply_settings_saved",
+                {
+                    "enabled": auto_apply_enabled,
+                    "weekly_target": int(weekly_target),
+                    "min_match_score": auto_min_match_percent / 100,
+                },
+            )
+            if updated_settings["enabled"] and updated_settings["consent"]:
+                with st.spinner("Auto Apply is taking effect immediately..."):
+                    try:
+                        activation_result = _activate_auto_apply_now(updated_settings)
+                        _store_auto_apply_notice(activation_result)
+                    except Exception as e:
+                        st.session_state["auto_apply_error"] = (
+                            f"Settings saved, but the immediate Auto Apply run failed: {e}"
+                        )
+            else:
+                st.session_state["auto_apply_notice"] = {
+                    "fetched_count": 0,
+                    "matched_count": 0,
+                    "evaluated_count": 0,
+                    "queued_count": 0,
+                    "skipped_count": 0,
+                    "duplicates": 0,
+                    "skipped": [],
+                    "message": "Auto Apply settings saved.",
+                }
+            st.rerun()
+
+    st.markdown("#### Submission queue")
+    queue_filter = st.segmented_control(
+        "Queue status",
+        options=["Active", "Submitted", "Skipped", "All"],
+        default="Active",
+    )
+    status_filters = {
+        "Active": ACTIVE_QUEUE_STATUSES,
+        "Submitted": {"submitted"},
+        "Skipped": {"skipped"},
+        "All": None,
+    }
+    queue_items = list_queue(username, status_filters.get(queue_filter))
+    if not queue_items:
+        st.info("No jobs in this queue yet. Enable Auto Apply and run a Match Scan.")
+    else:
+        st.dataframe(
+            [
+                {
+                    "Status": item["status"].replace("_", " ").title(),
+                    "Match": "{:.0%}".format(item["match_score"]),
+                    "Role": item["title"],
+                    "Company": item["company"],
+                    "Age when queued": "{}h".format(item["age_hours_at_queue"]),
+                    "Source": item["source"],
+                }
+                for item in queue_items
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
+        selected_id = st.selectbox(
+            "Manage queue item",
+            options=[item["id"] for item in queue_items],
+            format_func=lambda item_id: next(
+                "{} at {}".format(item["title"], item["company"])
+                for item in queue_items
+                if item["id"] == item_id
+            ),
+        )
+        selected_item = next(item for item in queue_items if item["id"] == selected_id)
+        if selected_item.get("review_reason"):
+            st.warning(selected_item["review_reason"])
+        action_open, action_submit, action_skip = st.columns(3)
+        with action_open:
+            st.link_button(
+                "Open application",
+                selected_item["url"],
+                help="Open the employer application page in a new tab.",
+                use_container_width=True,
+            )
+        with action_submit:
+            if st.button(
+                "Confirm submitted",
+                help="Use only after the employer confirms the application.",
+                use_container_width=True,
+            ):
+                update_queue_item(username, selected_id, "submitted")
+                add_application(
+                    username,
+                    selected_item["title"],
+                    selected_item["company"],
+                    url=selected_item["url"],
+                    location=selected_item["location"],
+                    salary=selected_item["salary"],
+                    source="auto-apply: {}".format(selected_item["source"]),
+                    notes="Confirmed from Auto Apply at {:.0%} match".format(
+                        selected_item["match_score"]
+                    ),
+                )
+                track_event(
+                    username,
+                    "auto_apply_submission_confirmed",
+                    {"source": selected_item["source"]},
+                )
+                st.rerun()
+        with action_skip:
+            if st.button(
+                "Skip role",
+                help="Remove this role from the active queue without applying.",
+                use_container_width=True,
+            ):
+                update_queue_item(username, selected_id, "skipped")
+                st.rerun()
+
+    st.info(
+        "Submission adapters are the next connection layer. Until an employer source confirms a submission, Trovly keeps the role queued for review and does not add it to your weekly total."
+    )
 
 with tab_targets:
     st.markdown("### Responsive company and recruiter targets")
@@ -1260,32 +1716,33 @@ with tab_pricing:
     for prompt in UPGRADE_PROMPTS.values():
         st.markdown("**{}** {}".format(prompt["headline"], prompt["body"]))
 
-with tab_admin:
-    st.markdown("### Admin analytics")
-    st.markdown(
-        "Funnel, retention, conversion, and alert engagement concepts for the current JSON-backed app."
-    )
+if tab_admin is not None:
+    with tab_admin:
+        st.markdown("### Admin analytics")
+        st.markdown(
+            "Funnel, retention, conversion, and alert engagement concepts for the current JSON-backed app."
+        )
 
-    funnel = get_funnel_metrics(days=30)
-    retention = get_retention_metrics(days=30)
-    st.markdown("#### Funnel")
-    st.table(funnel)
-    st.markdown("#### Retention")
-    if retention:
-        st.line_chart({row["date"]: row["active_users"] for row in retention})
-    else:
-        st.info("No retention events yet.")
+        funnel = get_funnel_metrics(days=30)
+        retention = get_retention_metrics(days=30)
+        st.markdown("#### Funnel")
+        st.table(funnel)
+        st.markdown("#### Retention")
+        if retention:
+            st.line_chart({row["date"]: row["active_users"] for row in retention})
+        else:
+            st.info("No retention events yet.")
 
-    st.markdown("#### Events to productionize")
-    for event in [
-        "resume_uploaded",
-        "match_clicked",
-        "application_tracked",
-        "subscription_upgraded",
-        "alert_engaged",
-        "interview_outcome_logged",
-    ]:
-        st.markdown(f"- {event}")
+        st.markdown("#### Events to productionize")
+        for event in [
+            "resume_uploaded",
+            "match_clicked",
+            "application_tracked",
+            "subscription_upgraded",
+            "alert_engaged",
+            "interview_outcome_logged",
+        ]:
+            st.markdown(f"- {event}")
 
 with tab_recruiter:
     st.markdown("### Recruiter Mode")

@@ -1,6 +1,6 @@
 # Trovly AI Living Change Doc
 
-Last updated: May 22, 2026
+Last updated: June 24, 2026
 
 ## One-Minute Summary
 
@@ -265,7 +265,29 @@ Interview talking point:
 
 > The SEO strategy is tied to product data. Instead of publishing generic blog posts, Trovly can turn job-market data into useful salary pages, hiring reports, and role-specific guides.
 
-## 10. Architecture and Scale Planning
+## 10. Controlled Auto Apply Automation
+
+I added an opt-in Auto Apply control center for users who want a higher-volume search without giving up accuracy or control.
+
+The workflow uses three qualification rules by default:
+
+- The match score must be strictly over 80%.
+- The job must have a known posting date no more than 24 hours old.
+- The system paces toward at least 200 confirmed applications per week.
+
+The feature also includes duplicate prevention, configurable exclusion phrases, a daily cap, a weekly hard cap, application identity fields, explicit user authorization, immediate activation when enabled, and a review queue. Jobs with unknown dates, missing URLs, duplicate applications, unsupported submission sources, or questions that need a person are not silently submitted.
+
+Technical explanation:
+
+The automation is split into an eligibility engine, a persistent queue, a pacing layer, and source-specific submission adapters. This makes the core rules testable without coupling them to any one job board. Most importantly, an application only counts toward the weekly target after an employer source or the user confirms the submission. A queued link is never reported as a completed application.
+
+The first release automates matching, qualification, deduplication, pacing, and queue management. When Auto Apply is enabled and saved, it immediately runs a fresh scan and queues eligible roles instead of waiting for a future manual scan. Direct submission remains behind provider adapters because employer forms have different required questions, authentication, and anti-bot controls. Unsupported forms stay in a review lane instead of encouraging inaccurate answers or fake completion metrics.
+
+Interview talking point:
+
+> I treated auto apply as a controlled workflow, not a click bot. I separated deterministic eligibility from provider-specific submission, required explicit consent, added daily and weekly caps, and made confirmed submission the only event that advances the KPI. That gives the product a scalable automation boundary without sacrificing user trust or data quality.
+
+## 11. Architecture and Scale Planning
 
 I documented a production architecture path using:
 
@@ -337,6 +359,7 @@ Core app:
 
 New modules:
 
+- `auto_apply.py`: eligibility rules, weekly pacing, queue state, adapter contract, and confirmation accounting.
 - `product_strategy.py`: centralized copy, pricing, features, FAQs, testimonials, upgrade prompts.
 - `job_intelligence.py`: match explanations, salary parsing, interview probability, readiness score.
 - `notification_engine.py`: alert preferences and channel templates.
@@ -367,7 +390,7 @@ Current verification results:
 
 - `venv/bin/python -m py_compile ...` passed.
 - `venv/bin/ruff check ...` passed.
-- `venv/bin/python -m pytest -q` passed with 13 tests.
+- `venv/bin/python -m pytest -q` passed with 21 tests.
 - Landing page rendered successfully at local Streamlit URL.
 
 ## How I Would Explain This in an Interview
@@ -426,11 +449,12 @@ The next highest-impact work would be:
 1. Connect Stripe Checkout and webhooks.
 2. Move user, job, match, and analytics data from JSON files to Supabase.
 3. Add background jobs for scans, alerts, and weekly digests.
-4. Add real email/SMS providers.
-5. Persist match explanations and resume versions.
-6. Add referral rewards and shareable career cards.
-7. Launch SEO salary and remote job trend pages.
-8. Build recruiter semantic search as a B2B revenue path.
+4. Connect source-specific submission adapters for supported employer systems.
+5. Add real email/SMS providers.
+6. Persist match explanations and resume versions.
+7. Add referral rewards and shareable career cards.
+8. Launch SEO salary and remote job trend pages.
+9. Build recruiter semantic search as a B2B revenue path.
 
 ## Personal Talking Points
 
@@ -440,4 +464,3 @@ The next highest-impact work would be:
 - I added analytics because SaaS growth needs measurable funnels.
 - I planned the future architecture without prematurely rewriting the app.
 - I focused on speed to revenue, retention, and clearer user outcomes.
-

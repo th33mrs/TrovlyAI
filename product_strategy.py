@@ -240,7 +240,7 @@ FAQS = [
     },
     {
         "q": "Does Trovly apply for me?",
-        "a": "No. It helps you choose better jobs, tailor faster, and track your pipeline so each application has a higher chance of converting.",
+        "a": "Auto Apply can queue fresh roles above your match threshold and submit through connected employer adapters after you opt in. Unsupported forms and screening questions stay in your review queue, and only confirmed submissions count toward your weekly goal.",
     },
     {
         "q": "What makes the match score different from keyword matching?",
